@@ -1,0 +1,75 @@
+.login-container {
+display: flex;
+min-height: 100vh;
+background: #0b0120;
+color: #fff;
+}
+
+
+/* Left image */
+.login-left {
+flex: 1;
+background-image: url('src\Components\pages\Login\planet.jpg'); /* Replace with your asset */
+background-size: cover;
+background-position: center;
+}
+
+
+/* Right section */
+.login-right {
+flex: 1;
+display: flex;
+justify-content: center;
+align-items: center;
+padding: 40px;
+background: rgba(20, 0, 40, 0.85);
+}
+
+
+.form-wrapper {
+width: 100%;
+max-width: 400px;
+}
+
+
+.form-title {
+font-size: 42px;
+font-weight: 800;
+margin-bottom: 30px;
+}
+
+
+.field-label {
+margin-bottom: 6px;
+font-size: 14px;
+display: block;
+}
+
+
+.input-icon svg {
+color: #bbb;
+}
+
+
+.login-btn {
+width: 100%;
+padding: 15px;
+margin-top: 25px;
+font-size: 18px;
+font-weight: 600;
+border: none;
+border-radius: 12px;
+color: white;
+background: linear-gradient(to right, #7427FF, #29A3FF);
+cursor: pointer;
+}
+
+
+/* Mobile responsive */
+@media (max-width: 900px) {
+.login-container {
+flex-direction: column;
+}
+.login-left {
+}
+}
