@@ -63,15 +63,20 @@ builder.Services.AddSwaggerGen(c =>
 // ===============================================
 // 3. DATABASE CONFIGURATION
 // ===============================================
-builder.Services.AddDbContext<AuthServerDbContext>(options =>
+builder.Services.AddDbContext<AuthServerDbContext>((serviceProvider, options) =>
+{
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions => sqlOptions.EnableRetryOnFailure(
+
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(30),
             errorNumbersToAdd: null)
-    )
-);
+    );
+
+    // For runtime, you could resolve tenant from HttpContext
+    // For now, we'll pass null to disable tenant filtering during startup
+});
 
 // ===============================================
 // 4. DATA PROTECTION (For Encryption)
@@ -248,6 +253,12 @@ if (app.Environment.IsDevelopment())
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Auth Server API v1");
         c.RoutePrefix = string.Empty; // Swagger at root
     });
+}
+if (args.Contains("seed"))
+{
+    using var scope = app.Services.CreateScope();
+    await SeedData(scope.ServiceProvider);
+    return;
 }
 
 app.UseHttpsRedirection();

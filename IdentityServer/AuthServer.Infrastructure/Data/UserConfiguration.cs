@@ -48,7 +48,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(u => u.Email)
             .HasDatabaseName("IX_Users_Email");
 
-        // Relationships
+        // Relationships - FIXED cascade delete issues
         builder.HasMany(u => u.ExternalLogins)
             .WithOne(el => el.User)
             .HasForeignKey(el => el.UserId)
@@ -57,12 +57,12 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasMany(u => u.ApplicationUserMappings)
             .WithOne(aum => aum.User)
             .HasForeignKey(aum => aum.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(u => u.RefreshTokens)
             .WithOne(rt => rt.User)
             .HasForeignKey(rt => rt.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(u => u.VerificationTokens)
             .WithOne(vt => vt.User)
@@ -113,7 +113,6 @@ public class ExternalLoginConfiguration : IEntityTypeConfiguration<ExternalLogin
             .HasDatabaseName("IX_ExternalLogins_UserId");
     }
 }
-
 public class ApplicationUserMappingConfiguration : IEntityTypeConfiguration<ApplicationUserMapping>
 {
     public void Configure(EntityTypeBuilder<ApplicationUserMapping> builder)
@@ -146,9 +145,19 @@ public class ApplicationUserMappingConfiguration : IEntityTypeConfiguration<Appl
 
         builder.HasIndex(aum => aum.ApplicationId)
             .HasDatabaseName("IX_AppUserMappings_ApplicationId");
+
+        // Relationships - RESTRICT to prevent cascade cycles
+        builder.HasOne(aum => aum.User)
+            .WithMany(u => u.ApplicationUserMappings)
+            .HasForeignKey(aum => aum.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(aum => aum.Application)
+            .WithMany()
+            .HasForeignKey(aum => aum.ApplicationId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
-
 public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> builder)
@@ -197,6 +206,22 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.HasIndex(rt => new { rt.ApplicationId, rt.UserId })
             .HasDatabaseName("IX_RefreshTokens_Application")
             .HasFilter("[IsRevoked] = 0");
+
+        // FIXED: Relationships with Restrict to prevent cascade cycles
+        builder.HasOne(rt => rt.User)
+            .WithMany(u => u.RefreshTokens)
+            .HasForeignKey(rt => rt.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(rt => rt.Application)
+            .WithMany()
+            .HasForeignKey(rt => rt.ApplicationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(rt => rt.Tenant)
+            .WithMany()
+            .HasForeignKey(rt => rt.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Self-referencing relationship for rotation
         builder.HasOne(rt => rt.ParentToken)
