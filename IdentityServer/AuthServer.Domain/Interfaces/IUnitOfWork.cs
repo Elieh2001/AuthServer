@@ -8,7 +8,7 @@ namespace AuthServer.Domain.Interfaces;
 
 public interface IUnitOfWork : IDisposable
 {
-    // Repositories
+    // Generic Repositories
     IRepository<Tenant> Tenants { get; }
     IRepository<Application> Applications { get; }
     IRepository<User> Users { get; }

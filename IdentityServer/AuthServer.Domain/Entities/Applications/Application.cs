@@ -1,4 +1,5 @@
-﻿using static AuthServer.Domain.Enumerations.Enums;
+﻿using AuthServer.Domain.Entities.Tokens;
+using static AuthServer.Domain.Enumerations.Enums;
 
 namespace AuthServer.Domain.Entities.Applications;
 
