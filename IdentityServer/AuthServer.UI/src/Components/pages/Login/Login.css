@@ -9,7 +9,7 @@ color: #fff;
 /* Left image */
 .login-left {
 flex: 1;
-background-image: url('src\Components\pages\Login\planet.jpg'); /* Replace with your asset */
+background-image: url('./planet.jpg'); /* Replace with your asset */
 background-size: cover;
 background-position: center;
 }
