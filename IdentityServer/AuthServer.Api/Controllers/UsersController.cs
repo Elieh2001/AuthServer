@@ -22,6 +22,35 @@ public class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Debug endpoint to view claims
+    /// </summary>
+    [HttpGet("debug")]
+    public IActionResult DebugClaims()
+    {
+        var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+        var isInAdminRole = User.IsInRole("Admin");
+        var isInSuperAdminRole = User.IsInRole("SuperAdmin");
+        var isInTenantAdminRole = User.IsInRole("TenantAdmin");
+
+        return Ok(new
+        {
+            claims,
+            roles = new
+            {
+                isAdmin = isInAdminRole,
+                isSuperAdmin = isInSuperAdminRole,
+                isTenantAdmin = isInTenantAdminRole
+            },
+            identity = new
+            {
+                isAuthenticated = User.Identity?.IsAuthenticated ?? false,
+                name = User.Identity?.Name,
+                authenticationType = User.Identity?.AuthenticationType
+            }
+        });
+    }
+
+    /// <summary>
     /// Create a new user
     /// </summary>
     [HttpPost("Add")]

@@ -22,7 +22,7 @@ const Login = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    tenantId: '',
+    tenantName: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,8 +37,7 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    const result = await login(formData.email, formData.password, formData.tenantId);
-
+    const result = await login(formData.email, formData.password, formData.tenantName);
     if (result.success) {
       navigate('/dashboard');
     } else {
@@ -137,13 +136,12 @@ const Login = () => {
                   }}
                 />
                 <TextField
-                  margin="normal"
-                  required
+                  margin="normal"                  
                   fullWidth
-                  name="tenantId"
-                  label="Tenant ID"
-                  id="tenantId"
-                  value={formData.tenantId}
+                  name="tenantName"
+                  label="Tenant Name"
+                  id="tenantName"
+                  value={formData.tenantName}
                   onChange={handleChange}
                   helperText="Enter your organization's tenant ID"
                   sx={{ mb: 2 }}

@@ -3,7 +3,7 @@ namespace AuthServer.Application.DTOs.Applications;
 public class ApplicationDto
 {
     public Guid Id { get; set; }
-    public Guid TenantId { get; set; }
+    public Guid? TenantId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string ClientId { get; set; } = string.Empty;

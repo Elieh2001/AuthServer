@@ -1,18 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Box, Button, Paper, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Typography, IconButton, Chip, CircularProgress,
-  Alert, Snackbar, Skeleton, Card, CardContent, Fade,
-} from '@mui/material';
-import { Add, Edit, Delete, Refresh } from '@mui/icons-material';
+import { Table, Button, Badge, Spinner, Card, Toast, ToastContainer } from 'react-bootstrap';
 import applicationService from '../../services/applicationService';
+import tenantService from '../../services/tenantService';
 import { useAuth } from '../../contexts/AuthContext';
+import { isSystemAdmin } from '../../utils/roleUtils';
+import ApplicationFormDialog from '../../components/applications/ApplicationFormDialog';
 
 const ApplicationsList = () => {
   const { user } = useAuth();
   const [applications, setApplications] = useState([]);
+  const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingApplication, setEditingApplication] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const fetchApplications = useCallback(async () => {
     try {
@@ -20,42 +21,85 @@ const ApplicationsList = () => {
       const response = await applicationService.getByTenant(user?.tenantId || '');
       setApplications(response || []);
     } catch (err) {
-      setSnackbar({ open: true, message: 'Failed to load applications', severity: 'error' });
+      setToast({ show: true, message: 'Failed to load applications', variant: 'danger' });
       console.error('Failed to load applications', err);
     } finally {
       setLoading(false);
     }
   }, [user?.tenantId]);
 
+  const fetchTenants = useCallback(async () => {
+    if (isSystemAdmin(user)) {
+      try {
+        const response = await tenantService.getAll();
+        setTenants(response || []);
+      } catch (err) {
+        console.error('Failed to load tenants', err);
+      }
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchApplications();
-  }, [fetchApplications]);
+    fetchTenants();
+  }, [fetchApplications, fetchTenants]);
+
+  const handleOpenDialog = (application = null) => {
+    setEditingApplication(application);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingApplication(null);
+  };
+
+  const handleSubmit = async (formData) => {
+    try {
+      if (editingApplication) {
+        await applicationService.update(editingApplication.id, formData);
+        setToast({ show: true, message: 'Application updated successfully', variant: 'success' });
+      } else {
+        await applicationService.create(formData);
+        setToast({ show: true, message: 'Application created successfully', variant: 'success' });
+      }
+      fetchApplications();
+      handleCloseDialog();
+    } catch (err) {
+      setToast({
+        show: true,
+        message: err.response?.data?.error || 'Operation failed',
+        variant: 'danger'
+      });
+      console.error('Submit error:', err);
+    }
+  };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this application?')) {
+    if (window.confirm('Delete this application? This action cannot be undone.')) {
       try {
         await applicationService.delete(id);
-        setSnackbar({ open: true, message: 'Application deleted successfully', severity: 'success' });
+        setToast({ show: true, message: 'Application deleted successfully', variant: 'success' });
         fetchApplications();
       } catch (err) {
-        setSnackbar({ open: true, message: 'Failed to delete application', severity: 'error' });
+        setToast({ show: true, message: 'Failed to delete application', variant: 'danger' });
         console.error('Delete error:', err);
       }
     }
   };
 
   const handleRegenerateSecret = async (id) => {
-    if (window.confirm('Regenerate secret for this application?')) {
+    if (window.confirm('Regenerate secret for this application? The old secret will stop working.')) {
       try {
         const response = await applicationService.regenerateSecret(id);
-        setSnackbar({
-          open: true,
+        setToast({
+          show: true,
           message: `New secret: ${response.clientSecret} - Please save it securely!`,
-          severity: 'warning'
+          variant: 'warning'
         });
         fetchApplications();
       } catch (err) {
-        setSnackbar({ open: true, message: 'Failed to regenerate secret', severity: 'error' });
+        setToast({ show: true, message: 'Failed to regenerate secret', variant: 'danger' });
         console.error('Regenerate error:', err);
       }
     }
@@ -63,122 +107,140 @@ const ApplicationsList = () => {
 
   if (loading) {
     return (
-      <Box>
-        <Skeleton variant="text" width={300} height={60} sx={{ mb: 3 }} />
-        <Card>
-          <CardContent>
-            <Skeleton variant="rectangular" height={400} />
-          </CardContent>
-        </Card>
-      </Box>
+      <div className="text-center py-5">
+        <Spinner animation="border" variant="primary" className="spinner-border-custom" />
+        <p className="mt-3 text-muted">Loading applications...</p>
+      </div>
     );
   }
 
   return (
-    <Fade in timeout={500}>
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" color="primary">
+    <div className="fade-in">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+          <h1 className="page-title text-gradient mb-2">
+            <i className="bi bi-app me-2"></i>
             Applications Management
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            sx={{
-              borderRadius: 2,
-              textTransform: 'none',
-              boxShadow: 3,
-              '&:hover': { boxShadow: 6 }
-            }}
-          >
-            Add Application
-          </Button>
-        </Box>
+          </h1>
+          <p className="text-muted mb-0">Manage OAuth/OIDC applications and their configurations</p>
+        </div>
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={() => handleOpenDialog()}
+          className="d-flex align-items-center gap-2"
+        >
+          <i className="bi bi-plus-circle"></i>
+          Add Application
+        </Button>
+      </div>
 
-        <Card elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <TableContainer>
-            <Table sx={{ minWidth: { xs: 300, sm: 650 } }}>
-              <TableHead sx={{ bgcolor: 'primary.light' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
-                    Client ID
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
-                    Type
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }} align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+      <Card className="border-0 shadow-sm">
+        <Card.Body className="p-0">
+          <div className="table-responsive">
+            <Table hover className="mb-0">
+              <thead>
+                <tr>
+                  <th><i className="bi bi-app me-2"></i>Name</th>
+                  <th className="d-none d-md-table-cell"><i className="bi bi-key me-2"></i>Client ID</th>
+                  <th className="d-none d-lg-table-cell"><i className="bi bi-gear me-2"></i>Type</th>
+                  <th><i className="bi bi-toggle-on me-2"></i>Status</th>
+                  <th className="text-end"><i className="bi bi-tools me-2"></i>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
                 {applications.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No applications found</Typography>
-                    </TableCell>
-                  </TableRow>
+                  <tr>
+                    <td colSpan={5} className="text-center py-5">
+                      <i className="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                      <p className="text-muted mb-0">No applications found</p>
+                    </td>
+                  </tr>
                 ) : (
                   applications.map((app) => (
-                    <TableRow
-                      key={app.id}
-                      hover
-                      sx={{
-                        '&:hover': { bgcolor: 'action.hover' },
-                        transition: 'background-color 0.3s'
-                      }}
-                    >
-                      <TableCell sx={{ fontWeight: 'medium' }}>{app.name}</TableCell>
-                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace' }}>
+                    <tr key={app.id}>
+                      <td className="fw-semibold">
+                        <i className="bi bi-app-indicator text-primary me-2"></i>
+                        {app.name}
+                      </td>
+                      <td className="d-none d-md-table-cell text-muted font-monospace small">
                         {app.clientId}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>
-                        {app.applicationType}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={app.isActive ? 'Active' : 'Inactive'}
-                          color={app.isActive ? 'success' : 'default'}
-                          size="small"
-                          sx={{ fontWeight: 'bold' }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton size="small" color="primary" sx={{ mr: 0.5 }}>
-                          <Edit fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color="warning"
-                          sx={{ mr: 0.5 }}
-                          onClick={() => handleRegenerateSecret(app.id)}
+                      </td>
+                      <td className="d-none d-lg-table-cell">
+                        <Badge bg="secondary" className="px-3 py-2">
+                          {app.applicationType}
+                        </Badge>
+                      </td>
+                      <td>
+                        <Badge
+                          bg={app.isActive ? 'success' : 'secondary'}
+                          className="px-3 py-2"
                         >
-                          <Refresh fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDelete(app.id)}>
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
+                          {app.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="text-end">
+                        <div className="d-flex gap-2 justify-content-end">
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => handleOpenDialog(app)}
+                            title="Edit"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </Button>
+                          <Button
+                            variant="outline-warning"
+                            size="sm"
+                            onClick={() => handleRegenerateSecret(app.id)}
+                            title="Regenerate Secret"
+                          >
+                            <i className="bi bi-arrow-clockwise"></i>
+                          </Button>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDelete(app.id)}
+                            title="Delete"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
                   ))
                 )}
-              </TableBody>
+              </tbody>
             </Table>
-          </TableContainer>
-        </Card>
+          </div>
+        </Card.Body>
+      </Card>
 
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      <ApplicationFormDialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        application={editingApplication}
+        tenants={tenants}
+      />
+
+      <ToastContainer position="bottom-end" className="p-3">
+        <Toast
+          show={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+          delay={5000}
+          autohide
+          bg={toast.variant}
         >
-          <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </Fade>
+          <Toast.Header>
+            <strong className="me-auto">
+              {toast.variant === 'success' ? 'Success' : toast.variant === 'warning' ? 'Warning' : 'Error'}
+            </strong>
+          </Toast.Header>
+          <Toast.Body className="text-white">{toast.message}</Toast.Body>
+        </Toast>
+      </ToastContainer>
+    </div>
   );
 };
 

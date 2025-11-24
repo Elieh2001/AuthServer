@@ -1,252 +1,213 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import {
-  Box,
-  Drawer,
-  AppBar,
-  Toolbar,
-  List,
-  Typography,
-  Divider,
-  IconButton,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  Avatar,
-  Menu,
-  MenuItem,
-  Chip,
-} from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Dashboard as DashboardIcon,
-  People as PeopleIcon,
-  Business as BusinessIcon,
-  Apps as AppsIcon,
-  History as HistoryIcon,
-  AccountCircle,
-  Logout as LogoutIcon,
-  Person as PersonIcon,
-} from '@mui/icons-material';
+import { Navbar, Nav, Container, Dropdown, Offcanvas } from 'react-bootstrap';
 import { useAuth } from '../../contexts/AuthContext';
-
-const drawerWidth = 240;
+import { isSystemAdmin, getUserRole } from '../../utils/roleUtils';
 
 const MainLayout = () => {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
-
-  const handleMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Users', icon: <PeopleIcon />, path: '/users' },
-    { text: 'Tenants', icon: <BusinessIcon />, path: '/tenants' },
-    { text: 'Applications', icon: <AppsIcon />, path: '/applications' },
-    { text: 'Audit Logs', icon: <HistoryIcon />, path: '/audit' },
-  ];
+  const menuItems = useMemo(() => {
+    const items = [
+      { text: 'Dashboard', icon: 'bi-speedometer2', path: '/dashboard', roles: ['all'] },
+      { text: 'Users', icon: 'bi-people', path: '/users', roles: ['systemAdmin', 'tenantAdmin'] },
+      { text: 'Tenants', icon: 'bi-building', path: '/tenants', roles: ['systemAdmin'] },
+      { text: 'Applications', icon: 'bi-app', path: '/applications', roles: ['systemAdmin', 'tenantAdmin'] },
+      { text: 'Audit Logs', icon: 'bi-clock-history', path: '/audit', roles: ['systemAdmin', 'tenantAdmin'] },
+    ];
 
-  const drawer = (
-    <Box sx={{ height: '100%', bgcolor: '#f5f5f5' }}>
-      <Toolbar
-        sx={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-        }}
-      >
-        <Typography variant="h6" noWrap component="div" fontWeight="bold">
-          AuthServer
-        </Typography>
-      </Toolbar>
-      <Divider />
-      <List sx={{ px: 2, py: 2 }}>
-        {menuItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
-              <ListItemButton
-                onClick={() => {
-                  navigate(item.path);
-                  if (mobileOpen) setMobileOpen(false);
-                }}
-                sx={{
-                  borderRadius: 2,
-                  transition: 'all 0.3s',
-                  bgcolor: isActive ? 'primary.main' : 'transparent',
-                  color: isActive ? 'white' : 'text.primary',
-                  '&:hover': {
-                    bgcolor: isActive ? 'primary.dark' : 'action.hover',
-                    transform: 'translateX(4px)',
-                  },
-                }}
-              >
-                <ListItemIcon sx={{ color: isActive ? 'white' : 'inherit', minWidth: 40 }}>
-                  {item.icon}
-                </ListItemIcon>
-                <ListItemText
-                  primary={item.text}
-                  primaryTypographyProps={{
-                    fontWeight: isActive ? 'bold' : 'normal',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          );
-        })}
-      </List>
-    </Box>
-  );
+    return items.filter(item => {
+      if (item.roles.includes('all')) return true;
+      if (item.roles.includes('systemAdmin') && isSystemAdmin(user)) return true;
+      if (item.roles.includes('tenantAdmin') && !isSystemAdmin(user) && user?.tenantId) return true;
+      return false;
+    });
+  }, [user]);
+
+  const isActivePath = (path) => location.pathname === path;
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <AppBar
-        position="fixed"
-        sx={{
-          zIndex: (theme) => theme.zIndex.drawer + 1,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          boxShadow: 3,
-        }}
-      >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+    <div className="d-flex flex-column min-vh-100">
+      {/* Top Navbar */}
+      <Navbar expand="lg" className="shadow-sm" style={{
+        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
+      }}>
+        <Container fluid className="px-3 px-lg-4">
+          <Navbar.Brand
+            onClick={() => navigate('/dashboard')}
+            className="text-white fw-bold fs-4 d-flex align-items-center"
+            style={{ cursor: 'pointer' }}
           >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
-            Auth Server Management
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" fontWeight="medium">
-                {user?.firstName} {user?.lastName}
-              </Typography>
-              <Chip
-                label={user?.role || 'Admin'}
-                size="small"
-                sx={{
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  fontWeight: 'bold',
-                }}
-              />
-            </Box>
-            <IconButton onClick={handleMenu} color="inherit">
-              <Avatar
-                sx={{
-                  width: 36,
-                  height: 36,
-                  bgcolor: 'rgba(255,255,255,0.3)',
-                  fontWeight: 'bold',
-                  border: '2px solid white',
-                }}
-              >
-                {user?.firstName?.[0]}{user?.lastName?.[0]}
-              </Avatar>
-            </IconButton>
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
-              PaperProps={{
-                sx: {
-                  mt: 1.5,
-                  minWidth: 200,
-                  borderRadius: 2,
-                  boxShadow: 3,
-                },
-              }}
-            >
-              <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="subtitle2" fontWeight="bold">
-                  {user?.firstName} {user?.lastName}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {user?.email}
-                </Typography>
-              </Box>
-              <MenuItem
-                onClick={() => {
-                  handleClose();
-                  navigate('/profile');
-                }}
-                sx={{ mt: 1, gap: 1 }}
-              >
-                <PersonIcon fontSize="small" />
-                Profile
-              </MenuItem>
-              <MenuItem onClick={handleLogout} sx={{ gap: 1, color: 'error.main' }}>
-                <LogoutIcon fontSize="small" />
-                Logout
-              </MenuItem>
-            </Menu>
-          </Box>
-        </Toolbar>
-      </AppBar>
+            <i className="bi bi-shield-lock-fill me-2"></i>
+            AuthServer
+          </Navbar.Brand>
 
-      <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}>
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-        >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
+          {/* Mobile Menu Toggle */}
+          <button
+            className="btn btn-link text-white d-lg-none"
+            onClick={() => setShowSidebar(!showSidebar)}
+          >
+            <i className="bi bi-list fs-3"></i>
+          </button>
 
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          p: { xs: 2, sm: 3 },
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          bgcolor: '#fafafa',
-          minHeight: '100vh',
-        }}
+          {/* Desktop Navigation */}
+          <Navbar.Collapse id="main-navbar">
+            <Nav className="me-auto d-none d-lg-flex">
+              {menuItems.map((item) => (
+                <Nav.Link
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className={`mx-2 px-3 py-2 rounded ${
+                    isActivePath(item.path)
+                      ? 'bg-white text-primary fw-bold'
+                      : 'text-white'
+                  }`}
+                  style={{
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    fontWeight: isActivePath(item.path) ? '600' : '500',
+                  }}
+                >
+                  <i className={`${item.icon} me-2`}></i>
+                  {item.text}
+                </Nav.Link>
+              ))}
+            </Nav>
+
+            {/* User Menu */}
+            <div className="d-flex align-items-center">
+              <div className="text-white me-3 d-none d-md-block">
+                <div className="fw-semibold">{user?.firstName} {user?.lastName}</div>
+                <div className="small opacity-75">{getUserRole(user)}</div>
+              </div>
+              <Dropdown align="end">
+                <Dropdown.Toggle
+                  variant="link"
+                  id="user-dropdown"
+                  className="text-decoration-none p-0 border-0"
+                  style={{ boxShadow: 'none' }}
+                >
+                  <div
+                    className="bg-white text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                    style={{
+                      width: '45px',
+                      height: '45px',
+                      fontSize: '1.1rem',
+                      border: '3px solid white',
+                      boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {user?.firstName?.[0]}{user?.lastName?.[0]}
+                  </div>
+                </Dropdown.Toggle>
+
+                <Dropdown.Menu className="mt-2 shadow-lg border-0" style={{ minWidth: '220px' }}>
+                  <div className="px-3 py-2 border-bottom">
+                    <div className="fw-semibold">{user?.firstName} {user?.lastName}</div>
+                    <div className="small text-muted">{user?.email}</div>
+                  </div>
+                  <Dropdown.Item
+                    onClick={() => navigate('/profile')}
+                    className="py-2"
+                  >
+                    <i className="bi bi-person me-2"></i>
+                    Profile
+                  </Dropdown.Item>
+                  <Dropdown.Divider />
+                  <Dropdown.Item
+                    onClick={handleLogout}
+                    className="text-danger py-2"
+                  >
+                    <i className="bi bi-box-arrow-right me-2"></i>
+                    Logout
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+            </div>
+          </Navbar.Collapse>
+        </Container>
+      </Navbar>
+
+      {/* Mobile Sidebar */}
+      <Offcanvas
+        show={showSidebar}
+        onHide={() => setShowSidebar(false)}
+        placement="start"
+        className="d-lg-none"
       >
-        <Toolbar />
-        <Box sx={{ maxWidth: '1400px', mx: 'auto' }}>
+        <Offcanvas.Header
+          closeButton
+          className="text-white"
+          style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' }}
+        >
+          <Offcanvas.Title className="fw-bold">
+            <i className="bi bi-shield-lock-fill me-2"></i>
+            AuthServer
+          </Offcanvas.Title>
+        </Offcanvas.Header>
+        <Offcanvas.Body>
+          <Nav className="flex-column">
+            {menuItems.map((item) => (
+              <Nav.Link
+                key={item.path}
+                onClick={() => {
+                  navigate(item.path);
+                  setShowSidebar(false);
+                }}
+                className={`mb-2 px-3 py-2 rounded ${
+                  isActivePath(item.path)
+                    ? 'bg-primary text-white'
+                    : 'text-dark'
+                }`}
+                style={{
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  fontWeight: isActivePath(item.path) ? '600' : '500',
+                }}
+              >
+                <i className={`${item.icon} me-2`}></i>
+                {item.text}
+              </Nav.Link>
+            ))}
+          </Nav>
+          <div className="mt-auto pt-3 border-top">
+            <div className="px-3 py-2">
+              <div className="fw-semibold">{user?.firstName} {user?.lastName}</div>
+              <div className="small text-muted">{user?.email}</div>
+            </div>
+          </div>
+        </Offcanvas.Body>
+      </Offcanvas>
+
+      {/* Main Content */}
+      <Container fluid className="flex-grow-1 py-4 px-3 px-lg-4" style={{ backgroundColor: '#f8f9fa' }}>
+        <div className="fade-in">
           <Outlet />
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </Container>
+
+      {/* Footer */}
+      <footer className="py-3 border-top bg-white">
+        <Container fluid className="px-3 px-lg-4">
+          <div className="d-flex justify-content-between align-items-center flex-wrap">
+            <p className="mb-0 text-muted small">
+              &copy; {new Date().getFullYear()} AuthServer. All rights reserved.
+            </p>
+            <p className="mb-0 text-muted small">
+              Version 1.0.0
+            </p>
+          </div>
+        </Container>
+      </footer>
+    </div>
   );
 };
 

@@ -1,0 +1,93 @@
+.tenant-form-modal .modal-dialog {
+  max-width: 95%;
+}
+
+.tenant-form-modal .nav-pills .nav-link {
+  color: #495057;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.tenant-form-modal .nav-pills .nav-link:hover {
+  background-color: #e9ecef;
+  transform: translateX(5px);
+}
+
+.tenant-form-modal .nav-pills .nav-link.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.tenant-form-modal .form-control-lg,
+.tenant-form-modal .form-select-lg {
+  border-radius: 8px;
+  border: 2px solid #e9ecef;
+  padding: 0.75rem 1rem;
+  transition: all 0.3s ease;
+}
+
+.tenant-form-modal .form-control-lg:focus,
+.tenant-form-modal .form-select-lg:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+.tenant-form-modal .card {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tenant-form-modal .card-header {
+  border-radius: 12px 12px 0 0;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.tenant-form-modal .form-label {
+  color: #495057;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.tenant-form-modal .form-check-input {
+  width: 3em;
+  height: 1.5em;
+  border-radius: 2em;
+}
+
+.tenant-form-modal .modal-footer {
+  border-top: 1px solid #e9ecef;
+  padding: 1rem 1.5rem;
+}
+
+.tenant-form-modal .btn-lg {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.tenant-form-modal .btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.tenant-form-modal .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.tenant-form-modal .input-group-text {
+  background-color: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+}
+
+.tenant-form-modal .form-control-color {
+  cursor: pointer;
+  border-radius: 8px;
+}

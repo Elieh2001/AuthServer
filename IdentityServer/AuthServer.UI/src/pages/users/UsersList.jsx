@@ -1,85 +1,66 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Box,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Grid,
-  Chip,
-  Alert,
-  Snackbar,
-  Card,
-  Skeleton,
-  CardContent,
-  Fade,
-} from '@mui/material';
-import { Add, Edit, Delete, Lock, LockOpen } from '@mui/icons-material';
+import { Table, Button, Badge, Spinner, Card, Toast, ToastContainer, Form, Row, Col } from 'react-bootstrap';
 import userService from '../../services/userService';
+import tenantService from '../../services/tenantService';
 import { useAuth } from '../../contexts/AuthContext';
+import { isSystemAdmin, canViewAllUsers } from '../../utils/roleUtils';
+import UserFormDialog from '../../components/users/UserFormDialog';
 
 const UsersList = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
+  const [tenants, setTenants] = useState([]);
+  const [selectedTenantId, setSelectedTenantId] = useState(currentUser?.tenantId || '');
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [formData, setFormData] = useState({
-    email: '',
-    firstName: '',
-    lastName: '',
-    password: '',
-    tenantId: currentUser?.tenantId || '',
-  });
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
 
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await userService.getAll(currentUser?.tenantId || '', 1, 100);
+      const tenantIdToFetch = canViewAllUsers(currentUser) ? selectedTenantId : currentUser?.tenantId;
+
+      if (!tenantIdToFetch) {
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+
+      const response = await userService.getAll(tenantIdToFetch, 1, 100);
       setUsers(response.data || []);
     } catch (error) {
-      setSnackbar({ open: true, message: 'Failed to load users', severity: 'error' });
+      setToast({ show: true, message: 'Failed to load users', variant: 'danger' });
       console.error('Failed to load users', error);
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.tenantId]);
+  }, [currentUser, selectedTenantId]);
+
+  const fetchTenants = useCallback(async () => {
+    if (canViewAllUsers(currentUser)) {
+      try {
+        const response = await tenantService.getAll();
+        setTenants(response || []);
+        if (response && response.length > 0 && !selectedTenantId) {
+          setSelectedTenantId(response[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load tenants', err);
+      }
+    }
+  }, [currentUser, selectedTenantId]);
+
+  useEffect(() => {
+    fetchTenants();
+  }, [fetchTenants]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
   const handleOpenDialog = (user = null) => {
-    if (user) {
-      setEditingUser(user);
-      setFormData({
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        password: '',
-        tenantId: user.tenantId,
-      });
-    } else {
-      setEditingUser(null);
-      setFormData({
-        email: '',
-        firstName: '',
-        lastName: '',
-        password: '',
-        tenantId: currentUser?.tenantId || '',
-      });
-    }
+    setEditingUser(user);
     setOpenDialog(true);
   };
 
@@ -88,27 +69,22 @@ const UsersList = () => {
     setEditingUser(null);
   };
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (formData) => {
     try {
       if (editingUser) {
         await userService.update(editingUser.id, formData);
-        setSnackbar({ open: true, message: 'User updated successfully', severity: 'success' });
+        setToast({ show: true, message: 'User updated successfully', variant: 'success' });
       } else {
         await userService.create(formData);
-        setSnackbar({ open: true, message: 'User created successfully', severity: 'success' });
+        setToast({ show: true, message: 'User created successfully', variant: 'success' });
       }
       fetchUsers();
       handleCloseDialog();
     } catch (error) {
-      setSnackbar({
-        open: true,
+      setToast({
+        show: true,
         message: error.response?.data?.error || 'Operation failed',
-        severity: 'error'
+        variant: 'danger'
       });
       console.error('Submit error:', error);
     }
@@ -118,10 +94,10 @@ const UsersList = () => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
         await userService.delete(userId);
-        setSnackbar({ open: true, message: 'User deleted successfully', severity: 'success' });
+        setToast({ show: true, message: 'User deleted successfully', variant: 'success' });
         fetchUsers();
       } catch (error) {
-        setSnackbar({ open: true, message: 'Failed to delete user', severity: 'error' });
+        setToast({ show: true, message: 'Failed to delete user', variant: 'danger' });
         console.error('Delete error:', error);
       }
     }
@@ -131,197 +107,169 @@ const UsersList = () => {
     try {
       if (isLocked) {
         await userService.unlock(userId);
-        setSnackbar({ open: true, message: 'User unlocked successfully', severity: 'success' });
+        setToast({ show: true, message: 'User unlocked successfully', variant: 'success' });
       } else {
         await userService.lock(userId, 30);
-        setSnackbar({ open: true, message: 'User locked successfully', severity: 'success' });
+        setToast({ show: true, message: 'User locked successfully', variant: 'success' });
       }
       fetchUsers();
     } catch (error) {
-      setSnackbar({ open: true, message: 'Operation failed', severity: 'error' });
+      setToast({ show: true, message: 'Operation failed', variant: 'danger' });
       console.error('Toggle lock error:', error);
     }
   };
 
   if (loading) {
     return (
-      <Box>
-        <Skeleton variant="text" width={300} height={60} sx={{ mb: 3 }} />
-        <Card>
-          <CardContent>
-            <Skeleton variant="rectangular" height={400} />
-          </CardContent>
-        </Card>
-      </Box>
+      <div className="text-center py-5">
+        <Spinner animation="border" variant="primary" className="spinner-border-custom" />
+        <p className="mt-3 text-muted">Loading users...</p>
+      </div>
     );
   }
 
   return (
-    <Fade in timeout={500}>
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" color="primary">
+    <div className="fade-in">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+          <h1 className="page-title text-gradient mb-2">
+            <i className="bi bi-people me-2"></i>
             Users Management
-          </Typography>
+          </h1>
+          <p className="text-muted mb-0">Manage user accounts and permissions</p>
+        </div>
+        <div className="d-flex gap-3 align-items-center flex-wrap">
+          {canViewAllUsers(currentUser) && tenants.length > 0 && (
+            <Form.Select
+              value={selectedTenantId}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              style={{ minWidth: '200px' }}
+            >
+              {tenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name}
+                </option>
+              ))}
+            </Form.Select>
+          )}
           <Button
-            variant="contained"
-            startIcon={<Add />}
+            variant="primary"
+            size="lg"
             onClick={() => handleOpenDialog()}
-            sx={{
-              borderRadius: 2,
-              textTransform: 'none',
-              boxShadow: 3,
-              '&:hover': { boxShadow: 6 }
-            }}
+            className="d-flex align-items-center gap-2"
           >
+            <i className="bi bi-plus-circle"></i>
             Add User
           </Button>
-        </Box>
+        </div>
+      </div>
 
-        <Card elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <TableContainer>
-            <Table sx={{ minWidth: { xs: 300, sm: 650 } }}>
-              <TableHead sx={{ bgcolor: 'primary.light' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
-                    Email
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }} align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+      <Card className="border-0 shadow-sm">
+        <Card.Body className="p-0">
+          <div className="table-responsive">
+            <Table hover className="mb-0">
+              <thead>
+                <tr>
+                  <th><i className="bi bi-person me-2"></i>Name</th>
+                  <th className="d-none d-md-table-cell"><i className="bi bi-envelope me-2"></i>Email</th>
+                  {canViewAllUsers(currentUser) && (
+                    <th className="d-none d-lg-table-cell"><i className="bi bi-building me-2"></i>Tenant</th>
+                  )}
+                  <th><i className="bi bi-toggle-on me-2"></i>Status</th>
+                  <th className="text-end"><i className="bi bi-gear me-2"></i>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
                 {users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No users found</Typography>
-                    </TableCell>
-                  </TableRow>
+                  <tr>
+                    <td colSpan={canViewAllUsers(currentUser) ? 5 : 4} className="text-center py-5">
+                      <i className="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                      <p className="text-muted mb-0">No users found</p>
+                    </td>
+                  </tr>
                 ) : (
                   users.map((user) => (
-                    <TableRow
-                      key={user.id}
-                      hover
-                      sx={{
-                        '&:hover': { bgcolor: 'action.hover' },
-                        transition: 'background-color 0.3s'
-                      }}
-                    >
-                      <TableCell sx={{ fontWeight: 'medium' }}>
+                    <tr key={user.id}>
+                      <td className="fw-semibold">
+                        <i className="bi bi-person-circle text-primary me-2"></i>
                         {`${user.firstName} ${user.lastName}`}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace' }}>
+                      </td>
+                      <td className="d-none d-md-table-cell text-muted">
                         {user.email}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={user.isActive ? 'Active' : 'Inactive'}
-                          color={user.isActive ? 'success' : 'default'}
-                          size="small"
-                          sx={{ fontWeight: 'bold' }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton size="small" color="primary" sx={{ mr: 0.5 }} onClick={() => handleOpenDialog(user)}>
-                          <Edit fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color={user.isLocked ? 'error' : 'warning'}
-                          sx={{ mr: 0.5 }}
-                          onClick={() => handleToggleLock(user.id, user.isLocked)}
-                        >
-                          {user.isLocked ? <LockOpen fontSize="small" /> : <Lock fontSize="small" />}
-                        </IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDelete(user.id)}>
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                      {canViewAllUsers(currentUser) && (
+                        <td className="d-none d-lg-table-cell">
+                          {tenants.find(t => t.id === user.tenantId)?.name || 'N/A'}
+                        </td>
+                      )}
+                      <td>
+                        <Badge bg={user.isActive ? 'success' : 'secondary'} className="px-3 py-2">
+                          {user.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="text-end">
+                        <div className="d-flex gap-2 justify-content-end">
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => handleOpenDialog(user)}
+                            title="Edit"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </Button>
+                          <Button
+                            variant={user.isLocked ? 'outline-danger' : 'outline-warning'}
+                            size="sm"
+                            onClick={() => handleToggleLock(user.id, user.isLocked)}
+                            title={user.isLocked ? 'Unlock' : 'Lock'}
+                          >
+                            <i className={`bi bi-${user.isLocked ? 'unlock' : 'lock'}`}></i>
+                          </Button>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDelete(user.id)}
+                            title="Delete"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
                   ))
                 )}
-              </TableBody>
+              </tbody>
             </Table>
-          </TableContainer>
-        </Card>
+          </div>
+        </Card.Body>
+      </Card>
 
-        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-          <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', fontWeight: 'bold' }}>
-            {editingUser ? 'Edit User' : 'Add User'}
-          </DialogTitle>
-          <form onSubmit={handleSubmit}>
-            <DialogContent sx={{ mt: 2 }}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="First Name"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    required
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Last Name"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    required
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                  />
-                </Grid>
-                {!editingUser && (
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Password"
-                      name="password"
-                      type="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      required
-                    />
-                  </Grid>
-                )}
-              </Grid>
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2 }}>
-              <Button onClick={handleCloseDialog} sx={{ textTransform: 'none' }}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="contained" sx={{ textTransform: 'none' }}>
-                {editingUser ? 'Update' : 'Create'}
-              </Button>
-            </DialogActions>
-          </form>
-        </Dialog>
+      <UserFormDialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        user={editingUser}
+        tenants={tenants}
+        currentUser={currentUser}
+      />
 
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      <ToastContainer position="bottom-end" className="p-3">
+        <Toast
+          show={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+          delay={5000}
+          autohide
+          bg={toast.variant}
         >
-          <Alert severity={snackbar.severity} sx={{ width: '100%' }}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Box>
-    </Fade>
+          <Toast.Header>
+            <strong className="me-auto">
+              {toast.variant === 'success' ? 'Success' : 'Error'}
+            </strong>
+          </Toast.Header>
+          <Toast.Body className="text-white">{toast.message}</Toast.Body>
+        </Toast>
+      </ToastContainer>
+    </div>
   );
 };
 

@@ -27,8 +27,7 @@ public class ApplicationService : IApplicationService
 
             var application = new Domain.Entities.Applications.Application
             {
-                Id = Guid.NewGuid(),
-                TenantId = dto.TenantId,
+                Id = Guid.NewGuid(),                
                 Name = dto.Name,
                 Description = dto.Description,
                 ClientId = clientId,

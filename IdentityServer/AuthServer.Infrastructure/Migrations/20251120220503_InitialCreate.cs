@@ -53,8 +53,8 @@ namespace AuthServer.Infrastructure.Migrations
                     SessionTimeoutMinutes = table.Column<int>(type: "int", nullable: false),
                     MaxFailedLoginAttempts = table.Column<int>(type: "int", nullable: false),
                     AccountLockoutDurationMinutes = table.Column<int>(type: "int", nullable: false),
-                    LogoUrl = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PrimaryColor = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LogoUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PrimaryColor = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
@@ -372,7 +372,7 @@ namespace AuthServer.Infrastructure.Migrations
                 name: "IX_RefreshTokens_Application",
                 table: "RefreshTokens",
                 columns: new[] { "ApplicationId", "UserId" },
-                filter: "[IsRevoked] = 0");
+                filter: "[IsRevoked] = 0 AND [ApplicationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RefreshTokens_ApplicationId1",

@@ -26,13 +26,13 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = async (email, password, tenantId) => {
+  const login = async (email, password, tenantName) => {
     try {
-      const response = await authService.login(email, password, tenantId);
-
+      const response = await authService.login(email, password, tenantName);
+console.log(response)
       if (response.accessToken) {
         localStorage.setItem('accessToken', response.accessToken);
-        localStorage.setItem('refreshToken', response.refreshToken);
+        localStorage.setItem('refreshToken', response.refreshToken);        
         localStorage.setItem('user', JSON.stringify(response.user));
         setUser(response.user);
         return { success: true };

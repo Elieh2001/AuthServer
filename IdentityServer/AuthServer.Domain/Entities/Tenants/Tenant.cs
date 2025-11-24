@@ -27,11 +27,11 @@ public class Tenant : SoftDeleteEntity
     public int AccountLockoutDurationMinutes { get; set; } = 30;
 
     // Branding
-    public string LogoUrl { get; set; }
-    public string PrimaryColor { get; set; }
+    public string? LogoUrl { get; set; }
+    public string? PrimaryColor { get; set; }
 
     // Navigation Properties
-    public virtual ICollection<Application> Applications { get; set; }
+    public virtual ICollection<TenantApplication> TenantApplications { get; set; }
     public virtual ICollection<User> Users { get; set; }
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
     public virtual ICollection<TenantAdmin> TenantAdmins { get; set; }
@@ -42,7 +42,7 @@ public class Tenant : SoftDeleteEntity
 
     public Tenant()
     {
-        Applications = new HashSet<Application>();
+        TenantApplications = new HashSet<TenantApplication>();
         Users = new HashSet<User>();
         RefreshTokens = new HashSet<RefreshToken>();
         TenantAdmins = new HashSet<TenantAdmin>();

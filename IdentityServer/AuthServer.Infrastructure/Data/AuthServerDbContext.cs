@@ -26,6 +26,7 @@ public class AuthServerDbContext : DbContext
     // DbSets
     public DbSet<Tenant> Tenants { get; set; }
     public DbSet<Application> Applications { get; set; }
+    public DbSet<TenantApplication> TenantApplications { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<ExternalLogin> ExternalLogins { get; set; }
     public DbSet<ApplicationUserMapping> ApplicationUserMappings { get; set; }
@@ -44,10 +45,10 @@ public class AuthServerDbContext : DbContext
         // Global query filters for multi-tenancy
         if (_currentTenantId.HasValue)
         {
-            // Apply tenant filter to all TenantEntity derived entities
-            modelBuilder.Entity<User>().HasQueryFilter(u => u.TenantId == _currentTenantId.Value);
-            modelBuilder.Entity<Application>().HasQueryFilter(a => a.TenantId == _currentTenantId.Value);
-            modelBuilder.Entity<RefreshToken>().HasQueryFilter(rt => rt.TenantId == _currentTenantId.Value);
+            // Apply tenant filter to TenantEntity derived entities
+            // Note: Users can have null TenantId (system admins)
+            modelBuilder.Entity<User>().HasQueryFilter(u => u.TenantId == _currentTenantId.Value || u.TenantId == null);
+            modelBuilder.Entity<RefreshToken>().HasQueryFilter(rt => rt.TenantId == _currentTenantId.Value || rt.TenantId == null);
         }
 
         // Global query filter for soft delete

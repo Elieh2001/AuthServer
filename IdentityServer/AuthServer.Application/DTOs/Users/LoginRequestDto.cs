@@ -10,10 +10,8 @@ public class LoginRequestDto
 
     [Required]
     public string Password { get; set; } = string.Empty;
-
-    [Required]
+    public string TenantName { get; set; } = string.Empty;
     public string ClientId { get; set; } = string.Empty;
-
     public string ClientSecret { get; set; } = string.Empty;
 
     public bool RememberMe { get; set; }

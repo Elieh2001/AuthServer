@@ -1,16 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Box, Button, Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, Typography, IconButton, Chip, Card,
-  Snackbar, Alert, Skeleton, CardContent, Fade,
-} from '@mui/material';
-import { Add, Edit, Delete, Block, CheckCircle } from '@mui/icons-material';
+import { Table, Button, Badge, Spinner, Card, Toast, ToastContainer } from 'react-bootstrap';
 import tenantService from '../../services/tenantService';
+import { useAuth } from '../../contexts/AuthContext';
+import { isSystemAdmin } from '../../utils/roleUtils';
+import TenantFormDialog from '../../components/tenants/TenantFormDialog';
+import { useNavigate } from 'react-router-dom';
 
 const TenantsList = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [openDialog, setOpenDialog] = useState(false);
+  const [editingTenant, setEditingTenant] = useState(null);
+  const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
+
+  useEffect(() => {
+    if (!isSystemAdmin(user)) {
+      setToast({ show: true, message: 'Access denied. Only System Admins can manage tenants.', variant: 'danger' });
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const fetchTenants = useCallback(async () => {
     try {
@@ -18,7 +28,7 @@ const TenantsList = () => {
       const response = await tenantService.getAll();
       setTenants(response || []);
     } catch (err) {
-      setSnackbar({ open: true, message: 'Failed to load tenants', severity: 'error' });
+      setToast({ show: true, message: 'Failed to load tenants', variant: 'danger' });
       console.error('Failed to load tenants', err);
     } finally {
       setLoading(false);
@@ -26,17 +36,50 @@ const TenantsList = () => {
   }, []);
 
   useEffect(() => {
-    fetchTenants();
-  }, [fetchTenants]);
+    if (isSystemAdmin(user)) {
+      fetchTenants();
+    }
+  }, [fetchTenants, user]);
+
+  const handleOpenDialog = (tenant = null) => {
+    setEditingTenant(tenant);
+    setOpenDialog(true);
+  };
+
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setEditingTenant(null);
+  };
+
+  const handleSubmit = async (formData) => {
+    try {
+      if (editingTenant) {
+        await tenantService.update(editingTenant.id, formData);
+        setToast({ show: true, message: 'Tenant updated successfully', variant: 'success' });
+      } else {
+        await tenantService.create(formData);
+        setToast({ show: true, message: 'Tenant created successfully', variant: 'success' });
+      }
+      fetchTenants();
+      handleCloseDialog();
+    } catch (err) {
+      setToast({
+        show: true,
+        message: err.response?.data?.error || 'Operation failed',
+        variant: 'danger'
+      });
+      console.error('Submit error:', err);
+    }
+  };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this tenant?')) {
+    if (window.confirm('Delete this tenant? This action cannot be undone.')) {
       try {
         await tenantService.delete(id);
-        setSnackbar({ open: true, message: 'Tenant deleted successfully', severity: 'success' });
+        setToast({ show: true, message: 'Tenant deleted successfully', variant: 'success' });
         fetchTenants();
       } catch (err) {
-        setSnackbar({ open: true, message: 'Failed to delete tenant', severity: 'error' });
+        setToast({ show: true, message: 'Failed to delete tenant', variant: 'danger' });
         console.error('Delete error:', err);
       }
     }
@@ -46,105 +89,151 @@ const TenantsList = () => {
     try {
       if (status === 'Active') {
         await tenantService.suspend(id);
-        setSnackbar({ open: true, message: 'Tenant suspended', severity: 'success' });
+        setToast({ show: true, message: 'Tenant suspended', variant: 'success' });
       } else {
         await tenantService.activate(id);
-        setSnackbar({ open: true, message: 'Tenant activated', severity: 'success' });
+        setToast({ show: true, message: 'Tenant activated', variant: 'success' });
       }
       fetchTenants();
     } catch (err) {
-      setSnackbar({ open: true, message: 'Failed to update status', severity: 'error' });
+      setToast({ show: true, message: 'Failed to update status', variant: 'danger' });
       console.error('Toggle status error:', err);
     }
   };
 
   if (loading) {
     return (
-      <Box>
-        <Skeleton variant="text" width={300} height={60} sx={{ mb: 3 }} />
-        <Card><CardContent><Skeleton variant="rectangular" height={400} /></CardContent></Card>
-      </Box>
+      <div className="text-center py-5">
+        <Spinner animation="border" variant="primary" className="spinner-border-custom" />
+        <p className="mt-3 text-muted">Loading tenants...</p>
+      </div>
     );
   }
 
   return (
-    <Fade in timeout={500}>
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" fontWeight="bold" color="primary">Tenants Management</Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            sx={{ borderRadius: 2, textTransform: 'none', boxShadow: 3, '&:hover': { boxShadow: 6 } }}
-          >
-            Add Tenant
-          </Button>
-        </Box>
-        <Card elevation={3} sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <TableContainer>
-            <Table sx={{ minWidth: { xs: 300, sm: 650 } }}>
-              <TableHead sx={{ bgcolor: 'primary.light' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white', display: { xs: 'none', sm: 'table-cell' } }}>
-                    Subdomain
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white', display: { xs: 'none', md: 'table-cell' } }}>
-                    Subscription
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', color: 'white' }} align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
+    <div className="fade-in">
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        <div>
+          <h1 className="page-title text-gradient mb-2">
+            <i className="bi bi-building me-2"></i>
+            Tenants Management
+          </h1>
+          <p className="text-muted mb-0">Manage tenant organizations and their settings</p>
+        </div>
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={() => handleOpenDialog()}
+          className="d-flex align-items-center gap-2"
+        >
+          <i className="bi bi-plus-circle"></i>
+          Add Tenant
+        </Button>
+      </div>
+
+      <Card className="border-0 shadow-sm">
+        <Card.Body className="p-0">
+          <div className="table-responsive">
+            <Table hover className="mb-0">
+              <thead>
+                <tr>
+                  <th><i className="bi bi-building me-2"></i>Name</th>
+                  <th className="d-none d-md-table-cell"><i className="bi bi-link-45deg me-2"></i>Subdomain</th>
+                  <th className="d-none d-lg-table-cell"><i className="bi bi-star me-2"></i>Subscription</th>
+                  <th><i className="bi bi-toggle-on me-2"></i>Status</th>
+                  <th className="text-end"><i className="bi bi-gear me-2"></i>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
                 {tenants.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No tenants found</Typography>
-                    </TableCell>
-                  </TableRow>
+                  <tr>
+                    <td colSpan={5} className="text-center py-5">
+                      <i className="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                      <p className="text-muted mb-0">No tenants found</p>
+                    </td>
+                  </tr>
                 ) : (
                   tenants.map((tenant) => (
-                    <TableRow key={tenant.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' }, transition: 'background-color 0.3s' }}>
-                      <TableCell sx={{ fontWeight: 'medium' }}>{tenant.name}</TableCell>
-                      <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' }, fontFamily: 'monospace' }}>
+                    <tr key={tenant.id}>
+                      <td className="fw-semibold">
+                        <i className="bi bi-building-fill text-primary me-2"></i>
+                        {tenant.name}
+                      </td>
+                      <td className="d-none d-md-table-cell text-muted font-monospace">
                         {tenant.subdomain}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: 'none', md: 'table-cell' } }}>{tenant.subscriptionPlan}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={tenant.status}
-                          color={tenant.status === 'Active' ? 'success' : 'default'}
-                          size="small"
-                          sx={{ fontWeight: 'bold' }}
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton size="small" color="primary" sx={{ mr: 0.5 }}><Edit fontSize="small" /></IconButton>
-                        <IconButton size="small" color="warning" sx={{ mr: 0.5 }} onClick={() => handleToggleStatus(tenant.id, tenant.status)}>
-                          {tenant.status === 'Active' ? <Block fontSize="small" /> : <CheckCircle fontSize="small" />}
-                        </IconButton>
-                        <IconButton size="small" color="error" onClick={() => handleDelete(tenant.id)}>
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                      <td className="d-none d-lg-table-cell">
+                        <Badge bg="info" className="px-3 py-2">{tenant.subscriptionPlan}</Badge>
+                      </td>
+                      <td>
+                        <Badge
+                          bg={tenant.status === 'Active' ? 'success' : 'secondary'}
+                          className="px-3 py-2"
+                        >
+                          {tenant.status}
+                        </Badge>
+                      </td>
+                      <td className="text-end">
+                        <div className="d-flex gap-2 justify-content-end">
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => handleOpenDialog(tenant)}
+                            title="Edit"
+                          >
+                            <i className="bi bi-pencil"></i>
+                          </Button>
+                          <Button
+                            variant={tenant.status === 'Active' ? 'outline-warning' : 'outline-success'}
+                            size="sm"
+                            onClick={() => handleToggleStatus(tenant.id, tenant.status)}
+                            title={tenant.status === 'Active' ? 'Suspend' : 'Activate'}
+                          >
+                            <i className={`bi bi-${tenant.status === 'Active' ? 'pause-circle' : 'play-circle'}`}></i>
+                          </Button>
+                          <Button
+                            variant="outline-danger"
+                            size="sm"
+                            onClick={() => handleDelete(tenant.id)}
+                            title="Delete"
+                          >
+                            <i className="bi bi-trash"></i>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
                   ))
                 )}
-              </TableBody>
+              </tbody>
             </Table>
-          </TableContainer>
-        </Card>
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          </div>
+        </Card.Body>
+      </Card>
+
+      <TenantFormDialog
+        open={openDialog}
+        onClose={handleCloseDialog}
+        onSubmit={handleSubmit}
+        tenant={editingTenant}
+      />
+
+      <ToastContainer position="bottom-end" className="p-3">
+        <Toast
+          show={toast.show}
+          onClose={() => setToast({ ...toast, show: false })}
+          delay={5000}
+          autohide
+          bg={toast.variant}
         >
-          <Alert severity={snackbar.severity} sx={{ width: '100%' }}>{snackbar.message}</Alert>
-        </Snackbar>
-      </Box>
-    </Fade>
+          <Toast.Header>
+            <strong className="me-auto">
+              {toast.variant === 'success' ? 'Success' : 'Error'}
+            </strong>
+          </Toast.Header>
+          <Toast.Body className="text-white">{toast.message}</Toast.Body>
+        </Toast>
+      </ToastContainer>
+    </div>
   );
 };
 

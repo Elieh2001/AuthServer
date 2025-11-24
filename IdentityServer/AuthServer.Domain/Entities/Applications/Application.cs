@@ -1,4 +1,5 @@
-﻿using AuthServer.Domain.Entities.Tokens;
+﻿using AuthServer.Domain.Entities.Tenants;
+using AuthServer.Domain.Entities.Tokens;
 using static AuthServer.Domain.Enumerations.Enums;
 
 namespace AuthServer.Domain.Entities.Applications;
@@ -63,6 +64,7 @@ public class Application : TenantEntity
     // Navigation Properties
     public virtual ICollection<ApplicationUserMapping> ApplicationUserMappings { get; set; }
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; }
+    public virtual ICollection<TenantApplication> TenantApplications { get; set; }
 
     #endregion
 
@@ -73,6 +75,7 @@ public class Application : TenantEntity
     {
         ApplicationUserMappings = new HashSet<ApplicationUserMapping>();
         RefreshTokens = new HashSet<RefreshToken>();
+        TenantApplications = new HashSet<TenantApplication>();
     }
 
     #endregion

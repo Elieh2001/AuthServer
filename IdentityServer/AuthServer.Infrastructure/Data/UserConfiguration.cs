@@ -1,4 +1,5 @@
 ﻿using AuthServer.Domain.Entities.Applications;
+using AuthServer.Domain.Entities.Tenants;
 using AuthServer.Domain.Entities.Tokens;
 using AuthServer.Domain.Entities.Users;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.PasswordHash)
             .HasMaxLength(500);
 
+        builder.Property(u => u.Roles)
+            .HasMaxLength(500);
+
         builder.Property(u => u.PhoneNumber)
             .HasMaxLength(50);
 
@@ -41,12 +45,18 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasDefaultValueSql("GETUTCDATE()");
 
+        // Unique index for tenant users (TenantId + Email must be unique)
+        // System admins (null TenantId) can share emails across different contexts
         builder.HasIndex(u => new { u.TenantId, u.Email })
             .IsUnique()
-            .HasDatabaseName("UQ_Users_Email_Tenant");
+            .HasDatabaseName("UQ_Users_Email_Tenant")
+            .HasFilter("[TenantId] IS NOT NULL");
 
         builder.HasIndex(u => u.Email)
             .HasDatabaseName("IX_Users_Email");
+
+        builder.HasIndex(u => u.IsSystemAdmin)
+            .HasDatabaseName("IX_Users_IsSystemAdmin");
 
         // Relationships - FIXED cascade delete issues
         builder.HasMany(u => u.ExternalLogins)
@@ -205,7 +215,7 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 
         builder.HasIndex(rt => new { rt.ApplicationId, rt.UserId })
             .HasDatabaseName("IX_RefreshTokens_Application")
-            .HasFilter("[IsRevoked] = 0");
+            .HasFilter("[IsRevoked] = 0 AND [ApplicationId] IS NOT NULL");
 
         // FIXED: Relationships with Restrict to prevent cascade cycles
         builder.HasOne(rt => rt.User)
@@ -216,11 +226,13 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.HasOne(rt => rt.Application)
             .WithMany()
             .HasForeignKey(rt => rt.ApplicationId)
+            .IsRequired(false) // Make ApplicationId optional
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(rt => rt.Tenant)
             .WithMany()
             .HasForeignKey(rt => rt.TenantId)
+            .IsRequired(false) // Make TenantId optional for system admin tokens
             .OnDelete(DeleteBehavior.Restrict);
 
         // Self-referencing relationship for rotation
@@ -228,5 +240,172 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
             .WithMany()
             .HasForeignKey(rt => rt.ParentTokenId)
             .OnDelete(DeleteBehavior.NoAction);
+    }
+}
+
+public class TenantConfiguration : IEntityTypeConfiguration<Tenant>
+{
+    public void Configure(EntityTypeBuilder<Tenant> builder)
+    {
+        builder.ToTable("Tenants");
+
+        builder.HasKey(t => t.Id);
+
+        builder.Property(t => t.Name)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(t => t.Subdomain)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(t => t.Status)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(t => t.SubscriptionPlan)
+            .HasMaxLength(100);
+
+        builder.Property(t => t.LogoUrl)
+            .HasMaxLength(500);
+
+        builder.Property(t => t.PrimaryColor)
+            .HasMaxLength(20);
+
+        builder.Property(t => t.CreatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        builder.Property(t => t.UpdatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        builder.HasIndex(t => t.Subdomain)
+            .IsUnique()
+            .HasDatabaseName("UQ_Tenants_Subdomain");
+
+        builder.HasIndex(t => t.Name)
+            .HasDatabaseName("IX_Tenants_Name");
+
+        // Relationships
+        builder.HasMany(t => t.TenantApplications)
+            .WithOne(ta => ta.Tenant)
+            .HasForeignKey(ta => ta.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(t => t.Users)
+            .WithOne(u => u.Tenant)
+            .HasForeignKey(u => u.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(t => t.TenantAdmins)
+            .WithOne(ta => ta.Tenant)
+            .HasForeignKey(ta => ta.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class ApplicationConfiguration : IEntityTypeConfiguration<Application>
+{
+    public void Configure(EntityTypeBuilder<Application> builder)
+    {
+        builder.ToTable("Applications");
+
+        builder.HasKey(a => a.Id);
+
+        builder.Property(a => a.Name)
+            .IsRequired()
+            .HasMaxLength(200);
+
+        builder.Property(a => a.Description)
+            .HasMaxLength(1000);
+
+        builder.Property(a => a.ClientId)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(a => a.ClientSecretHash)
+            .IsRequired()
+            .HasMaxLength(500);
+
+        builder.Property(a => a.ApplicationType)
+            .IsRequired()
+            .HasConversion<string>()
+            .HasMaxLength(50);
+
+        builder.Property(a => a.AllowedGrantTypes)
+            .HasMaxLength(500);
+
+        builder.Property(a => a.AllowedScopes)
+            .HasMaxLength(500);
+
+        builder.Property(a => a.RedirectUris)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(a => a.PostLogoutRedirectUris)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(a => a.AllowedCorsOrigins)
+            .HasColumnType("nvarchar(max)");
+
+        builder.Property(a => a.CreatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        builder.Property(a => a.UpdatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        builder.HasIndex(a => a.ClientId)
+            .IsUnique()
+            .HasDatabaseName("UQ_Applications_ClientId");
+
+        // Relationships
+        builder.HasMany(a => a.TenantApplications)
+            .WithOne(ta => ta.Application)
+            .HasForeignKey(ta => ta.ApplicationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(a => a.ApplicationUserMappings)
+            .WithOne(aum => aum.Application)
+            .HasForeignKey(aum => aum.ApplicationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(a => a.RefreshTokens)
+            .WithOne(rt => rt.Application)
+            .HasForeignKey(rt => rt.ApplicationId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class TenantApplicationConfiguration : IEntityTypeConfiguration<TenantApplication>
+{
+    public void Configure(EntityTypeBuilder<TenantApplication> builder)
+    {
+        builder.ToTable("TenantApplications");
+
+        builder.HasKey(ta => ta.Id);
+
+        builder.Property(ta => ta.CreatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        builder.Property(ta => ta.UpdatedAt)
+            .IsRequired()
+            .HasDefaultValueSql("GETUTCDATE()");
+
+        // Unique constraint to prevent duplicate tenant-application mappings
+        builder.HasIndex(ta => new { ta.TenantId, ta.ApplicationId })
+            .IsUnique()
+            .HasDatabaseName("UQ_TenantApplications_Tenant_Application");
+
+        builder.HasIndex(ta => ta.TenantId)
+            .HasDatabaseName("IX_TenantApplications_TenantId");
+
+        builder.HasIndex(ta => ta.ApplicationId)
+            .HasDatabaseName("IX_TenantApplications_ApplicationId");
+
+        // Relationships configured in Tenant and Application configurations
     }
 }

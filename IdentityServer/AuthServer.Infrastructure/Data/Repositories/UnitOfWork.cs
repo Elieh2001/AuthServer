@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace AuthServer.Infrastructure.Data.Repositories;
 
-    public class UnitOfWork : IUnitOfWork
+public class UnitOfWork : IUnitOfWork
 {
     private readonly AuthServerDbContext _context;
     private IDbContextTransaction _transaction;
@@ -16,6 +16,7 @@ namespace AuthServer.Infrastructure.Data.Repositories;
     // Repository instances
     private IRepository<Tenant> _tenants;
     private IRepository<Application> _applications;
+    private IRepository<TenantApplication> _tenantApplications;
     private IRepository<User> _users;
     private IRepository<ExternalLogin> _externalLogins;
     private IRepository<ApplicationUserMapping> _applicationUserMappings;
@@ -35,6 +36,9 @@ namespace AuthServer.Infrastructure.Data.Repositories;
 
     public IRepository<Application> Applications =>
         _applications ??= new Repository<Application>(_context);
+
+    public IRepository<TenantApplication> TenantApplications =>
+        _tenantApplications ??= new Repository<TenantApplication>(_context);
 
     public IRepository<User> Users =>
         _users ??= new Repository<User>(_context);
@@ -65,7 +69,14 @@ namespace AuthServer.Infrastructure.Data.Repositories;
 
     public async Task<int> SaveChangesAsync()
     {
-        return await _context.SaveChangesAsync();
+        try
+        {
+            return await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            throw ex;
+        }
     }
 
     // Transaction support

@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AuthServer.Infrastructure.Migrations
 {
     [DbContext(typeof(AuthServerDbContext))]
-    [Migration("20251119214712_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20251124113900_ThirdMig")]
+    partial class ThirdMig
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -40,11 +40,13 @@ namespace AuthServer.Infrastructure.Migrations
 
                     b.Property<string>("AllowedGrantTypes")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("AllowedScopes")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("AppleClientId")
                         .IsRequired()
@@ -65,23 +67,30 @@ namespace AuthServer.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int>("ApplicationType")
-                        .HasColumnType("int");
+                    b.Property<string>("ApplicationType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("ClientId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("ClientSecretHash")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("GoogleClientId")
                         .IsRequired()
@@ -143,7 +152,8 @@ namespace AuthServer.Infrastructure.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("PostLogoutRedirectUris")
                         .IsRequired()
@@ -162,17 +172,23 @@ namespace AuthServer.Infrastructure.Migrations
                     b.Property<bool>("RefreshTokenRotationEnabled")
                         .HasColumnType("bit");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClientId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Applications_ClientId");
+
                     b.HasIndex("TenantId");
 
-                    b.ToTable("Applications");
+                    b.ToTable("Applications", (string)null);
                 });
 
             modelBuilder.Entity("AuthServer.Domain.Entities.Applications.ApplicationUserMapping", b =>
@@ -294,7 +310,9 @@ namespace AuthServer.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
@@ -303,15 +321,16 @@ namespace AuthServer.Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("LogoUrl")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<int>("MaxFailedLoginAttempts")
                         .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<int>("PasswordMinLength")
                         .HasColumnType("int");
@@ -329,29 +348,42 @@ namespace AuthServer.Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("PrimaryColor")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("SessionTimeoutMinutes")
                         .HasColumnType("int");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("Subdomain")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("SubscriptionPlan")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Tenants");
+                    b.HasIndex("Name")
+                        .HasDatabaseName("IX_Tenants_Name");
+
+                    b.HasIndex("Subdomain")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_Tenants_Subdomain");
+
+                    b.ToTable("Tenants", (string)null);
                 });
 
             modelBuilder.Entity("AuthServer.Domain.Entities.Tenants.TenantAdmin", b =>
@@ -407,6 +439,43 @@ namespace AuthServer.Infrastructure.Migrations
                     b.ToTable("TenantAdmins");
                 });
 
+            modelBuilder.Entity("AuthServer.Domain.Entities.Tenants.TenantApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ApplicationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasDefaultValueSql("GETUTCDATE()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId")
+                        .HasDatabaseName("IX_TenantApplications_ApplicationId");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("IX_TenantApplications_TenantId");
+
+                    b.HasIndex("TenantId", "ApplicationId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_TenantApplications_Tenant_Application");
+
+                    b.ToTable("TenantApplications", (string)null);
+                });
+
             modelBuilder.Entity("AuthServer.Domain.Entities.Tokens.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -454,7 +523,7 @@ namespace AuthServer.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("TenantId1")
@@ -503,7 +572,7 @@ namespace AuthServer.Infrastructure.Migrations
 
                     b.HasIndex("ApplicationId", "UserId")
                         .HasDatabaseName("IX_RefreshTokens_Application")
-                        .HasFilter("[IsRevoked] = 0");
+                        .HasFilter("[IsRevoked] = 0 AND [ApplicationId] IS NOT NULL");
 
                     b.ToTable("RefreshTokens", (string)null);
                 });
@@ -635,6 +704,9 @@ namespace AuthServer.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsSystemAdmin")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("datetime2");
 
@@ -667,10 +739,15 @@ namespace AuthServer.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberVerified")
                         .HasColumnType("bit");
 
+                    b.Property<string>("Roles")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<Guid>("SecurityStamp")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("TwoFactorEnabled")
@@ -686,9 +763,13 @@ namespace AuthServer.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .HasDatabaseName("IX_Users_Email");
 
+                    b.HasIndex("IsSystemAdmin")
+                        .HasDatabaseName("IX_Users_IsSystemAdmin");
+
                     b.HasIndex("TenantId", "Email")
                         .IsUnique()
-                        .HasDatabaseName("UQ_Users_Email_Tenant");
+                        .HasDatabaseName("UQ_Users_Email_Tenant")
+                        .HasFilter("[TenantId] IS NOT NULL");
 
                     b.ToTable("Users", (string)null);
                 });
@@ -696,10 +777,8 @@ namespace AuthServer.Infrastructure.Migrations
             modelBuilder.Entity("AuthServer.Domain.Entities.Applications.Application", b =>
                 {
                     b.HasOne("AuthServer.Domain.Entities.Tenants.Tenant", "Tenant")
-                        .WithMany("Applications")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .WithMany()
+                        .HasForeignKey("TenantId");
 
                     b.Navigation("Tenant");
                 });
@@ -731,7 +810,27 @@ namespace AuthServer.Infrastructure.Migrations
                 {
                     b.HasOne("AuthServer.Domain.Entities.Tenants.Tenant", "Tenant")
                         .WithMany("TenantAdmins")
-                        .HasForeignKey("TenantId");
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("AuthServer.Domain.Entities.Tenants.TenantApplication", b =>
+                {
+                    b.HasOne("AuthServer.Domain.Entities.Applications.Application", "Application")
+                        .WithMany("TenantApplications")
+                        .HasForeignKey("ApplicationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("AuthServer.Domain.Entities.Tenants.Tenant", "Tenant")
+                        .WithMany("TenantApplications")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Application");
 
                     b.Navigation("Tenant");
                 });
@@ -741,8 +840,7 @@ namespace AuthServer.Infrastructure.Migrations
                     b.HasOne("AuthServer.Domain.Entities.Applications.Application", "Application")
                         .WithMany()
                         .HasForeignKey("ApplicationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("AuthServer.Domain.Entities.Applications.Application", null)
                         .WithMany("RefreshTokens")
@@ -756,8 +854,7 @@ namespace AuthServer.Infrastructure.Migrations
                     b.HasOne("AuthServer.Domain.Entities.Tenants.Tenant", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("AuthServer.Domain.Entities.Tenants.Tenant", null)
                         .WithMany("RefreshTokens")
@@ -805,8 +902,7 @@ namespace AuthServer.Infrastructure.Migrations
                     b.HasOne("AuthServer.Domain.Entities.Tenants.Tenant", "Tenant")
                         .WithMany("Users")
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Tenant");
                 });
@@ -816,15 +912,17 @@ namespace AuthServer.Infrastructure.Migrations
                     b.Navigation("ApplicationUserMappings");
 
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("TenantApplications");
                 });
 
             modelBuilder.Entity("AuthServer.Domain.Entities.Tenants.Tenant", b =>
                 {
-                    b.Navigation("Applications");
-
                     b.Navigation("RefreshTokens");
 
                     b.Navigation("TenantAdmins");
+
+                    b.Navigation("TenantApplications");
 
                     b.Navigation("Users");
                 });

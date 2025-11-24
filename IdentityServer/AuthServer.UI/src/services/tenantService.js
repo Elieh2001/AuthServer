@@ -1,4 +1,5 @@
 import api from './api';
+import { TenantDto, CreateTenantDto, UpdateTenantDto } from '../models';
 
 const tenantService = {
   getAll: async () => {
@@ -6,50 +7,38 @@ const tenantService = {
     return response.data;
   },
 
-  getById: async (tenantId) => {
-    const response = await api.get('/Tenant/GetById', {
-      params: { tenantId },
-    });
+  getById: async (id) => {
+    const response = await api.get(`/Tenant/GetById?tenantId=${id}`);
     return response.data;
   },
 
   getBySubdomain: async (subdomain) => {
-    const response = await api.get('/Tenant/GetBySubdomain', {
-      params: { subdomain },
-    });
+    const response = await api.get(`/Tenant/GetBySubdomain?subdomain=${subdomain}`);
     return response.data;
   },
 
-  create: async (tenantData) => {
-    const response = await api.post('/Tenant/Add', tenantData);
+  create: async (data) => {
+    const response = await api.post('/Tenant/Add', data);
     return response.data;
   },
 
-  update: async (tenantId, tenantData) => {
-    const response = await api.post('/Tenant/Update', tenantData, {
-      params: { tenantId },
-    });
+  update: async (id, data) => {
+    const response = await api.post(`/Tenant/Update?tenantId=${id}`, data);
     return response.data;
   },
 
-  delete: async (tenantId) => {
-    const response = await api.post('/Tenant/Delete', null, {
-      params: { tenantId },
-    });
+  delete: async (id) => {
+    const response = await api.post(`/Tenant/Delete?tenantId=${id}`);
     return response.data;
   },
 
-  suspend: async (tenantId) => {
-    const response = await api.post('/Tenant/Suspend', null, {
-      params: { tenantId },
-    });
+  activate: async (id) => {
+    const response = await api.post(`/Tenant/Activate?tenantId=${id}`);
     return response.data;
   },
 
-  activate: async (tenantId) => {
-    const response = await api.post('/Tenant/Activate', null, {
-      params: { tenantId },
-    });
+  suspend: async (id) => {
+    const response = await api.post(`/Tenant/Suspend?tenantId=${id}`);
     return response.data;
   },
 };

@@ -36,9 +36,12 @@ public class AuthenticationService : IAuthenticationService
     {
         try
         {
-            // Get application
-            var application = await _unitOfWork.Applications
-                .FirstOrDefaultAsync(a => a.ClientId == request.ClientId);
+            // var application = new Domain.Entities.Applications.Application();
+            //if (string.IsNullOrEmpty(request.ClientId))
+            //{ application = await _unitOfWork.Applications.FirstOrDefaultAsync(a => a.Name == "Default Application"); }
+
+            // Check if the tenant name is passed
+            var application = await _unitOfWork.Applications.FirstOrDefaultAsync(a => string.IsNullOrEmpty(request.ClientId) == true ? a.Name == "Default Application" : a.ClientId == request.ClientId);
 
             if (application == null || !application.IsActive)
             {
@@ -46,16 +49,27 @@ public class AuthenticationService : IAuthenticationService
                 return Result<LoginResponseDto>.Failure("Invalid client credentials");
             }
 
-            // Load tenant separately
-            var tenant = await _unitOfWork.Tenants.GetByIdAsync(application.TenantId);
-            application.Tenant = tenant;
+            // Determine tenant
+            Tenant? tenant = null;
+            Guid? tenantId = null;
 
-            // Get user
-            var user = await _unitOfWork.Users
-                .FirstOrDefaultAsync(u => u.Email == request.Email && u.TenantId == application.TenantId);
+            if (!string.IsNullOrEmpty(request.TenantName))
+            {
+                tenant = (await _unitOfWork.Tenants.FindAsync(x => x.Name == request.TenantName)).FirstOrDefault();
+                tenantId = tenant?.Id;
+            }
+
+            // Get user - check for system admin first (null tenantId), then regular user
+            var user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.IsSystemAdmin && u.TenantId == null);
+
+            if (user == null && tenantId.HasValue)
+            {
+                // If not a system admin, try to find regular user in the specified tenant
+                user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.TenantId == tenantId);
+            }
 
             // Handle legacy database authentication
-            if (application.HasLegacyDatabase && user == null)
+            if (application.HasLegacyDatabase && user == null && tenantId.HasValue)
             {
                 var legacyResult = await _legacyAuthService.AuthenticateAgainstLegacyDbAsync(
                     application.Id, request.Email, request.Password);
@@ -63,27 +77,27 @@ public class AuthenticationService : IAuthenticationService
                 if (legacyResult.IsSuccess)
                 {
                     // Create or update user in auth server
-                    user = await GetOrCreateUserFromLegacy(application.TenantId, application.Id, legacyResult.Data);
+                    user = await GetOrCreateUserFromLegacy(tenantId.Value, application.Id, legacyResult.Data);
                 }
             }
 
             if (user == null)
             {
-                await LogAuditEvent(application.TenantId, null, request.ClientId, "LoginFailed", false, "User not found", request.IpAddress);
+                await LogAuditEvent(tenantId, null, request.ClientId, "LoginFailed", false, "User not found", request.IpAddress);
                 return Result<LoginResponseDto>.Failure("Invalid email or password");
             }
 
             // Check if user is active
             if (!user.IsActive)
             {
-                await LogAuditEvent(application.TenantId, user.Id, request.ClientId, "LoginFailed", false, "User is inactive", request.IpAddress);
+                await LogAuditEvent(user.TenantId, user.Id, request.ClientId, "LoginFailed", false, "User is inactive", request.IpAddress);
                 return Result<LoginResponseDto>.Failure("Account is inactive");
             }
 
             // Check if user is locked out
             if (user.IsLockedOut())
             {
-                await LogAuditEvent(application.TenantId, user.Id, request.ClientId, "LoginFailed", false, "User is locked out", request.IpAddress);
+                await LogAuditEvent(user.TenantId, user.Id, request.ClientId, "LoginFailed", false, "User is locked out", request.IpAddress);
                 return Result<LoginResponseDto>.Failure($"Account is locked until {user.LockoutEnd:yyyy-MM-dd HH:mm}");
             }
 
@@ -92,8 +106,19 @@ public class AuthenticationService : IAuthenticationService
             {
                 if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 {
-                    await HandleFailedLogin(user, application.Tenant);
-                    await LogAuditEvent(application.TenantId, user.Id, request.ClientId, "LoginFailed", false, "Invalid password", request.IpAddress);
+                    // Only handle failed login for non-system admins with tenant
+                    if (tenant != null)
+                    {
+                        await HandleFailedLogin(user, tenant);
+                    }
+                    else
+                    {
+                        user.AccessFailedCount++;
+                        _unitOfWork.Users.Update(user);
+                        await _unitOfWork.SaveChangesAsync();
+                    }
+
+                    await LogAuditEvent(user.TenantId, user.Id, request.ClientId, "LoginFailed", false, "Invalid password", request.IpAddress);
                     return Result<LoginResponseDto>.Failure("Invalid email or password");
                 }
             }
@@ -104,16 +129,16 @@ public class AuthenticationService : IAuthenticationService
             user.LastLoginIp = request.IpAddress;
             _unitOfWork.Users.Update(user);
 
-            // Generate tokens
+            // Generate tokens - use user's tenantId (null for system admin, actual tenant for regular users)
             var accessToken = await _tokenService.GenerateAccessTokenAsync(
-                user.Id, application.TenantId, application.Id);
+                user.Id, user.TenantId, application.Id);
 
             var refreshToken = await _tokenService.GenerateRefreshTokenAsync(
-                user.Id, application.TenantId, application.Id, request.IpAddress, request.UserAgent);
+                user.Id, user.TenantId, application.Id, request.IpAddress, request.UserAgent);
 
             await _unitOfWork.SaveChangesAsync();
 
-            await LogAuditEvent(application.TenantId, user.Id, request.ClientId, "Login", true, null, request.IpAddress);
+            await LogAuditEvent(user.TenantId, user.Id, request.ClientId, "Login", true, null, request.IpAddress);
 
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var expiresIn = application.AccessTokenLifetimeSeconds ?? (int.Parse(jwtSettings["AccessTokenExpirationMinutes"] ?? "15") * 60);
@@ -127,9 +152,11 @@ public class AuthenticationService : IAuthenticationService
                 {
                     UserId = user.Id,
                     Email = user.Email,
+                    TenantId = user.TenantId,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
-                    EmailVerified = user.EmailVerified
+                    EmailVerified = user.EmailVerified,
+                    IsSystemAdmin = user.IsSystemAdmin
                 }
             });
         }
@@ -156,7 +183,7 @@ public class AuthenticationService : IAuthenticationService
             // Load related entities separately
             var user = await _unitOfWork.Users.GetByIdAsync(refreshToken.UserId);
             var application = await _unitOfWork.Applications.GetByIdAsync(refreshToken.ApplicationId);
-            
+
             refreshToken.User = user;
             refreshToken.Application = application;
 
@@ -196,9 +223,11 @@ public class AuthenticationService : IAuthenticationService
                 {
                     UserId = refreshToken.User.Id,
                     Email = refreshToken.User.Email,
+                    TenantId = refreshToken.User.TenantId,
                     FirstName = refreshToken.User.FirstName,
                     LastName = refreshToken.User.LastName,
-                    EmailVerified = refreshToken.User.EmailVerified
+                    EmailVerified = refreshToken.User.EmailVerified,
+                    IsSystemAdmin = refreshToken.User.IsSystemAdmin
                 }
             });
         }

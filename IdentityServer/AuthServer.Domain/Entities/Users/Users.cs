@@ -14,14 +14,16 @@ public class User : TenantEntity
     public string PasswordHash { get; set; } = string.Empty;
 
     public string PhoneNumber { get; set; } = string.Empty;
-    public bool PhoneNumberVerified { get; set; } 
+    public bool PhoneNumberVerified { get; set; }
 
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
 
     // Security
-    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
+    public Guid SecurityStamp { get; set; }
     public bool TwoFactorEnabled { get; set; }
+    public bool IsSystemAdmin { get; set; } = false;
+    public string Roles { get; set; } = string.Empty;
 
     // Account Status
     public bool IsActive { get; set; } = true;

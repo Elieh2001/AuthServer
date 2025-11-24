@@ -8,10 +8,10 @@ public class RefreshToken : TenantEntity
     #region Properties
 
     public Guid UserId { get; set; }
-    public virtual User User { get; set; } = new User();
+    public virtual User User { get; set; } 
 
     public Guid ApplicationId { get; set; }
-    public virtual Application Application { get; set; } = new Application();
+    public virtual Application? Application { get; set; }
 
     public string TokenHash { get; set; } = string.Empty;
 
@@ -19,7 +19,7 @@ public class RefreshToken : TenantEntity
 
     // For rotation
     public Guid? ParentTokenId { get; set; }
-    public virtual RefreshToken ParentToken { get; set; } = new RefreshToken();
+    public virtual RefreshToken? ParentToken { get; set; }
 
     // Revocation
     public bool IsRevoked { get; set; }

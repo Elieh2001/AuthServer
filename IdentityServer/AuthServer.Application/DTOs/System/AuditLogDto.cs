@@ -14,6 +14,6 @@ public class AuditLogDto
     public string UserAgent { get; set; } = string.Empty;
     public bool Success { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
-    public Dictionary<string, object> AdditionalData { get; set; } = new Dictionary<string, object>();
+    public Dictionary<string, object> AdditionalData { get; set; }
     public DateTime CreatedAt { get; set; }
 }

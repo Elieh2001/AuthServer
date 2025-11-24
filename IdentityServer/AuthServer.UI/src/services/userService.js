@@ -1,71 +1,54 @@
 import api from './api';
+import { UserDto, CreateUserDto, UpdateUserDto } from '../models';
 
 const userService = {
-  getAll: async (tenantId, page = 1, pageSize = 20) => {
-    const response = await api.get('/User/GetByTenant', {
-      params: { tenantId, page, pageSize },
-    });
+  getAll: async (tenantId, page = 1, pageSize = 100) => {
+    const response = await api.get(`/User/GetByTenant?tenantId=${tenantId}&page=${page}&pageSize=${pageSize}`);
     return response.data;
   },
 
-  getById: async (userId) => {
-    const response = await api.get('/User/GetById', {
-      params: { userId },
-    });
+  getById: async (id) => {
+    const response = await api.get(`/User/GetById?userId=${id}`);
     return response.data;
   },
 
   getByEmail: async (email, tenantId) => {
-    const response = await api.get('/User/GetByEmail', {
-      params: { email, tenantId },
-    });
+    const response = await api.get(`/User/GetByEmail?email=${email}&tenantId=${tenantId}`);
     return response.data;
   },
 
-  create: async (userData) => {
-    const response = await api.post('/User/Add', userData);
+  create: async (data) => {
+    const response = await api.post('/User/Add', data);
     return response.data;
   },
 
-  update: async (userId, userData) => {
-    const response = await api.post('/User/Update', userData, {
-      params: { userId },
-    });
+  update: async (id, data) => {
+    const response = await api.post(`/User/Update?userId=${id}`, data);
     return response.data;
   },
 
-  delete: async (userId) => {
-    const response = await api.post('/User/Delete', null, {
-      params: { userId },
-    });
+  delete: async (id) => {
+    const response = await api.post(`/User/Delete?userId=${id}`);
     return response.data;
   },
 
-  lock: async (userId, durationMinutes) => {
-    const response = await api.post('/User/Lock', { durationMinutes }, {
-      params: { userId },
-    });
+  lock: async (id, durationMinutes) => {
+    const response = await api.post(`/User/Lock?userId=${id}`, { durationMinutes });
     return response.data;
   },
 
-  unlock: async (userId) => {
-    const response = await api.post('/User/Unlock', null, {
-      params: { userId },
-    });
+  unlock: async (id) => {
+    const response = await api.post(`/User/Unlock?userId=${id}`);
     return response.data;
   },
 
-  linkProvider: async (userId, providerData) => {
-    const response = await api.post('/User/LinkProvider', providerData, {
-      params: { userId },
-    });
+  linkProvider: async (userId, data) => {
+    const response = await api.post(`/User/LinkProvider?userId=${userId}`, data);
     return response.data;
   },
 
   unlinkProvider: async (userId, provider) => {
-    const response = await api.post('/User/UnlinkProvider', null, {
-      params: { userId, provider },
-    });
+    const response = await api.post(`/User/UnlinkProvider?userId=${userId}&provider=${provider}`);
     return response.data;
   },
 };

@@ -107,6 +107,14 @@ public class TenantsController : ControllerBase
         return Ok(result.Data);
     }
 
+    
+    [HttpGet("debug")]
+    public IActionResult DebugRoles()
+    {
+        return Ok(User.Claims.Select(c => new { c.Type, c.Value }));
+    }
+
+
     /// <summary>
     /// Update tenant information
     /// </summary>

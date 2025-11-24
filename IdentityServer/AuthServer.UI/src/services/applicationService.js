@@ -1,58 +1,44 @@
 import api from './api';
+import { CreateApplicationDto, UpdateApplicationDto, ApplicationDto } from '../models';
 
 const applicationService = {
-  getByTenant: async (tenantId) => {
-    const response = await api.get('/Application/GetByTenant', {
-      params: { tenantId },
-    });
-    return response.data;
-  },
-
-  getById: async (applicationId) => {
-    const response = await api.get('/Application/GetById', {
-      params: { applicationId },
-    });
+  getById: async (id) => {
+    const response = await api.get(`/Application/GetById?applicationId=${id}`);
     return response.data;
   },
 
   getByClientId: async (clientId) => {
-    const response = await api.get('/Application/GetByClientId', {
-      params: { clientId },
-    });
+    const response = await api.get(`/Application/GetByClientId?clientId=${clientId}`);
     return response.data;
   },
 
-  create: async (applicationData) => {
-    const response = await api.post('/Application/Add', applicationData);
+  getByTenant: async (tenantId) => {
+    const response = await api.get(`/Application/GetByTenant?tenantId=${tenantId}`);
     return response.data;
   },
 
-  update: async (applicationId, applicationData) => {
-    const response = await api.post('/Application/Update', applicationData, {
-      params: { applicationId },
-    });
+  create: async (data) => {
+    const response = await api.post('/Application/Add', data);
     return response.data;
   },
 
-  delete: async (applicationId) => {
-    const response = await api.post('/Application/Delete', null, {
-      params: { applicationId },
-    });
+  update: async (id, data) => {
+    const response = await api.post(`/Application/Update?applicationId=${id}`, data);
     return response.data;
   },
 
-  regenerateSecret: async (applicationId) => {
-    const response = await api.post('/Application/RegenerateSecret', null, {
-      params: { applicationId },
-    });
+  delete: async (id) => {
+    const response = await api.post(`/Application/Delete?applicationId=${id}`);
+    return response.data;
+  },
+
+  regenerateSecret: async (id) => {
+    const response = await api.post(`/Application/RegenerateSecret?applicationId=${id}`);
     return response.data;
   },
 
   validateCredentials: async (clientId, clientSecret) => {
-    const response = await api.post('/Application/ValidateCredentials', {
-      clientId,
-      clientSecret,
-    });
+    const response = await api.post('/Application/ValidateCredentials', { clientId, clientSecret });
     return response.data;
   },
 };

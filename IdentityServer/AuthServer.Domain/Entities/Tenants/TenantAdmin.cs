@@ -7,7 +7,7 @@ public class TenantAdmin : BaseEntity
     #region Properties
 
     public Guid? TenantId { get; set; } // NULL for super admins
-    public virtual Tenant Tenant { get; set; } = new Tenant();
+    public virtual Tenant? Tenant { get; set; }
 
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;

@@ -11,6 +11,7 @@ public interface IUnitOfWork : IDisposable
     // Generic Repositories
     IRepository<Tenant> Tenants { get; }
     IRepository<Application> Applications { get; }
+    IRepository<TenantApplication> TenantApplications { get; }
     IRepository<User> Users { get; }
     IRepository<ExternalLogin> ExternalLogins { get; }
     IRepository<ApplicationUserMapping> ApplicationUserMappings { get; }

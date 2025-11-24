@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using AuthServer.Application.Interfaces;
 using AuthServer.Application.Services;
@@ -21,6 +22,12 @@ var builder = WebApplication.CreateBuilder(args);
 // ===============================================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpContextAccessor();
+
+// ===============================================
+// USER CONTEXT SERVICE
+// ===============================================
+builder.Services.AddScoped<AuthServer.Api.Services.IUserContext, AuthServer.Api.Services.UserContext>();
 
 // ===============================================
 // 2. SWAGGER CONFIGURATION
@@ -109,6 +116,9 @@ var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];
 var key = Encoding.UTF8.GetBytes(secretKey);
 
+// Configure JWT Authentication with proper role handling
+System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -118,6 +128,8 @@ builder.Services.AddAuthentication(options =>
 {
     options.RequireHttpsMetadata = false; // Set to true in production
     options.SaveToken = true;
+    options.MapInboundClaims = false;
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
@@ -127,17 +139,46 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidAudience = jwtSettings["Audience"],
         ValidateLifetime = true,
-        ClockSkew = TimeSpan.FromMinutes(int.Parse(jwtSettings["ClockSkewMinutes"]))
+        ClockSkew = TimeSpan.FromMinutes(int.Parse(jwtSettings["ClockSkewMinutes"])),
+        RoleClaimType = "role",
+        NameClaimType = "sub"
     };
 
     options.Events = new JwtBearerEvents
     {
         OnAuthenticationFailed = context =>
         {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError("Authentication failed: {Exception}", context.Exception.Message);
+
             if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
             {
-                context.Response.Headers.Add("Token-Expired", "true");
+                context.Response.Headers.Append("Token-Expired", "true");
             }
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+
+            if (context.Principal?.Identity is ClaimsIdentity identity)
+            {
+                var allClaims = identity.Claims.Select(c => $"{c.Type}={c.Value}").ToList();
+                logger.LogInformation("Token validated. Claims: {Claims}", string.Join("; ", allClaims));
+
+                // Extract roles from the token
+                var roleClaims = identity.FindAll("role").ToList();
+                logger.LogInformation("Found {Count} role claims: {Roles}",
+                    roleClaims.Count, string.Join(", ", roleClaims.Select(r => r.Value)));
+            }
+
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("Authentication challenge for {Path}. Error: {Error}",
+                context.Request.Path, context.ErrorDescription);
             return Task.CompletedTask;
         }
     };
@@ -264,6 +305,7 @@ if (args.Contains("seed"))
 app.UseHttpsRedirection();
 app.UseCors("DefaultCorsPolicy");
 app.UseAuthentication();
+app.UseMiddleware<AuthServer.Api.Middleware.AuthenticationLoggingMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
@@ -304,12 +346,12 @@ static async Task SeedData(IServiceProvider services)
     var unitOfWork = services.GetRequiredService<IUnitOfWork>();
     var configuration = services.GetRequiredService<IConfiguration>();
 
-    // Check if we have any tenants
+    // 1. Create default tenant
     var tenantExists = await unitOfWork.Tenants.ExistsAsync(t => true);
+    Guid defaultTenantId;
 
     if (!tenantExists)
     {
-        // Create default tenant
         var defaultTenant = new AuthServer.Domain.Entities.Tenants.Tenant
         {
             Id = Guid.NewGuid(),
@@ -322,11 +364,18 @@ static async Task SeedData(IServiceProvider services)
         await unitOfWork.Tenants.AddAsync(defaultTenant);
         await unitOfWork.SaveChangesAsync();
 
-        Console.WriteLine($"Created default tenant: {defaultTenant.Id}");
-        Console.WriteLine($"Subdomain: {defaultTenant.Subdomain}");
+        defaultTenantId = defaultTenant.Id;
+        Console.WriteLine($"✓ Created default tenant: {defaultTenantId}");
+        Console.WriteLine($"  Subdomain: {defaultTenant.Subdomain}");
+    }
+    else
+    {
+        var existingTenant = await unitOfWork.Tenants.FirstOrDefaultAsync(t => true);
+        defaultTenantId = existingTenant.Id;
+        Console.WriteLine($"✓ Default tenant already exists: {defaultTenantId}");
     }
 
-    // Check if we have any admin users
+    // 2. Create super admin
     var adminExists = await unitOfWork.TenantAdmins.ExistsAsync(a => true);
 
     if (!adminExists)
@@ -349,8 +398,160 @@ static async Task SeedData(IServiceProvider services)
         await unitOfWork.TenantAdmins.AddAsync(superAdmin);
         await unitOfWork.SaveChangesAsync();
 
-        Console.WriteLine($"Created super admin: {adminEmail}");
-        Console.WriteLine($"Password: {adminPassword}");
-        Console.WriteLine("IMPORTANT: Change this password in production!");
+        Console.WriteLine($"✓ Created super admin: {adminEmail}");
+        Console.WriteLine($"  Password: {adminPassword}");
     }
+    else
+    {
+        Console.WriteLine("✓ Super admin already exists");
+    }
+
+    // 3. Create default application
+    var appExists = await unitOfWork.Applications.ExistsAsync(a => a.Name == "Default Application");
+
+    Guid defaultAppId;
+    if (!appExists)
+    {
+        var clientId = "default-client";
+        var clientSecret = "default-secret-change-in-production";
+
+        var defaultApp = new AuthServer.Domain.Entities.Applications.Application
+        {
+            Id = Guid.NewGuid(),
+            Name = "Default Application",
+            Description = "Default OAuth2 application for testing",
+            ClientId = clientId,
+            ClientSecretHash = BCrypt.Net.BCrypt.HashPassword(clientSecret),
+            ApplicationType = AuthServer.Domain.Enumerations.Enums.ApplicationType.Native,
+            AllowedGrantTypes = "password,refresh_token",
+            AllowedScopes = "openid,profile,email",
+            RedirectUris = "[\"http://localhost:3000/callback\",\"http://localhost:5000/callback\"]",
+            PostLogoutRedirectUris = "[\"http://localhost:3000\",\"http://localhost:5000\"]",
+            AllowedCorsOrigins = "[\"http://localhost:3000\",\"http://localhost:5000\"]",
+            GoogleEnabled = false,
+            AppleEnabled = false,
+            LinkedInEnabled = false,
+            HasLegacyDatabase = false,
+            IsActive = true,
+            GoogleClientId = string.Empty,
+            GoogleClientSecret = string.Empty,
+            AppleClientId = string.Empty,
+            AppleTeamId = string.Empty,
+            AppleKeyId = string.Empty,
+            ApplePrivateKey = string.Empty,
+            LinkedInClientId = string.Empty,
+            LinkedInClientSecret = string.Empty,
+            LegacyDatabaseConnectionString = string.Empty,
+            LegacyUserTableName = string.Empty,
+            LegacyUserIdColumn = string.Empty,
+            LegacyEmailColumn = string.Empty,
+            LegacyPasswordColumn = string.Empty,
+            LegacyAdditionalColumnsMapping = string.Empty
+        };
+
+        await unitOfWork.Applications.AddAsync(defaultApp);
+        await unitOfWork.SaveChangesAsync();
+
+        defaultAppId = defaultApp.Id;
+        Console.WriteLine($"✓ Created default application: {defaultApp.Id}");
+        Console.WriteLine($"  Client ID: {clientId}");
+        Console.WriteLine($"  Client Secret: {clientSecret}");
+
+        // Create TenantApplication mapping
+        var tenantApp = new AuthServer.Domain.Entities.Tenants.TenantApplication
+        {
+            Id = Guid.NewGuid(),
+            TenantId = defaultTenantId,
+            ApplicationId = defaultAppId
+        };
+        await unitOfWork.TenantApplications.AddAsync(tenantApp);
+        await unitOfWork.SaveChangesAsync();
+        Console.WriteLine($"✓ Linked application to default tenant");
+    }
+    else
+    {
+        var existingApp = await unitOfWork.Applications.FirstOrDefaultAsync(a => a.Name == "Default Application");
+        defaultAppId = existingApp.Id;
+        Console.WriteLine("✓ Default application already exists");
+    }
+
+    // 4. Create system admin user (no tenant)
+    var systemAdminExists = await unitOfWork.Users.ExistsAsync(u => u.IsSystemAdmin && u.TenantId == null);
+
+    if (!systemAdminExists)
+    {
+        var systemAdminEmail = "sysadmin@authserver.com";
+        var systemAdminPassword = "SysAdmin@123456";
+
+        var systemAdmin = new AuthServer.Domain.Entities.Users.User
+        {
+            Id = Guid.NewGuid(),
+            TenantId = null,
+            Email = systemAdminEmail,
+            EmailVerified = true,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(systemAdminPassword),
+            FirstName = "System",
+            LastName = "Admin",
+            IsSystemAdmin = true,
+            Roles = "SuperAdmin,Admin",
+            IsActive = true,
+            LockoutEnabled = true,
+            TwoFactorEnabled = false,
+            PhoneNumber = string.Empty,
+            LastLoginIp = string.Empty
+        };
+
+        await unitOfWork.Users.AddAsync(systemAdmin);
+        await unitOfWork.SaveChangesAsync();
+
+        Console.WriteLine($"✓ Created system admin user: {systemAdminEmail}");
+        Console.WriteLine($"  Password: {systemAdminPassword}");
+    }
+    else
+    {
+        Console.WriteLine("✓ System admin user already exists");
+    }
+
+    // 5. Create default tenant user
+    var userExists = await unitOfWork.Users.ExistsAsync(u => u.TenantId == defaultTenantId);
+
+    if (!userExists)
+    {
+        var userEmail = "admin@example.com";
+        var userPassword = "Admin@123456";
+
+        var defaultUser = new AuthServer.Domain.Entities.Users.User
+        {
+            Id = Guid.NewGuid(),
+            TenantId = defaultTenantId,
+            Email = userEmail,
+            EmailVerified = true,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(userPassword),
+            FirstName = "Tenant",
+            LastName = "Admin",
+            IsSystemAdmin = false,
+            Roles = "TenantAdmin,Admin",
+            IsActive = true,
+            LockoutEnabled = true,
+            TwoFactorEnabled = false,
+            PhoneNumber = string.Empty,
+            LastLoginIp = string.Empty
+        };
+
+        await unitOfWork.Users.AddAsync(defaultUser);
+        await unitOfWork.SaveChangesAsync();
+
+        Console.WriteLine($"✓ Created default tenant user: {userEmail}");
+        Console.WriteLine($"  Password: {userPassword}");
+    }
+    else
+    {
+        Console.WriteLine("✓ Default tenant user already exists");
+    }
+
+    Console.WriteLine("\n==============================================");
+    Console.WriteLine("SEED COMPLETED SUCCESSFULLY!");
+    Console.WriteLine("==============================================");
+    Console.WriteLine("IMPORTANT: Change all default passwords in production!");
+    Console.WriteLine("==============================================\n");
 }
