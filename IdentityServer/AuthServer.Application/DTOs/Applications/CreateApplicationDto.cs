@@ -27,18 +27,18 @@ public class CreateApplicationDto
 
     // External providers
     public bool GoogleEnabled { get; set; }
-    public string GoogleClientId { get; set; } = string.Empty;
-    public string GoogleClientSecret { get; set; } = string.Empty;
+    public string? GoogleClientId { get; set; } = string.Empty;
+    public string? GoogleClientSecret { get; set; } = string.Empty;
 
     public bool AppleEnabled { get; set; }
-    public string AppleClientId { get; set; } = string.Empty;
-    public string AppleTeamId { get; set; } = string.Empty;
-    public string AppleKeyId { get; set; } = string.Empty;
-    public string ApplePrivateKey { get; set; } = string.Empty;
+    public string? AppleClientId { get; set; } = string.Empty;
+    public string? AppleTeamId { get; set; } = string.Empty;
+    public string? AppleKeyId { get; set; } = string.Empty;
+    public string? ApplePrivateKey { get; set; } = string.Empty;
 
     public bool LinkedInEnabled { get; set; }
-    public string LinkedInClientId { get; set; } = string.Empty;
-    public string LinkedInClientSecret { get; set; } = string.Empty;
+    public string? LinkedInClientId { get; set; } = string.Empty;
+    public string? LinkedInClientSecret { get; set; } = string.Empty;
 
     // Legacy database
     public bool HasLegacyDatabase { get; set; }

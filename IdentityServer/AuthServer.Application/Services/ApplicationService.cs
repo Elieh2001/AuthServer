@@ -27,13 +27,14 @@ public class ApplicationService : IApplicationService
 
             var application = new Domain.Entities.Applications.Application
             {
-                Id = Guid.NewGuid(),                
+                Id = Guid.NewGuid(),
                 Name = dto.Name,
                 Description = dto.Description,
                 ClientId = clientId,
                 ClientSecretHash = clientSecretHash,
                 ApplicationType = Enum.Parse<ApplicationType>(dto.ApplicationType),
                 AllowedGrantTypes = dto.AllowedGrantTypes,
+                AllowedCorsOrigins = "{ }",
                 AllowedScopes = dto.AllowedScopes,
                 RedirectUris = dto.RedirectUris,
                 PostLogoutRedirectUris = dto.PostLogoutRedirectUris,
@@ -98,7 +99,7 @@ public class ApplicationService : IApplicationService
     {
         var apps = await _unitOfWork.Applications.FindAsync(a => a.TenantId == tenantId);
 
-        return Result<IEnumerable<ApplicationDto>>.Success(apps.ToList().Select(x=>MapToDto(x)));
+        return Result<IEnumerable<ApplicationDto>>.Success(apps.ToList().Select(x => MapToDto(x)));
     }
 
     public async Task<Result<ApplicationDto>> UpdateApplicationAsync(Guid applicationId, UpdateApplicationDto dto)

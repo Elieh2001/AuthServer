@@ -5,7 +5,10 @@
       "Bash(npm install:*)",
       "Bash(timeout 3 bash:*)",
       "Bash(timeout 2 bash:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(nuget restore)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []
