@@ -36,12 +36,21 @@ public class AuthenticationService : IAuthenticationService
     {
         try
         {
-            // var application = new Domain.Entities.Applications.Application();
-            //if (string.IsNullOrEmpty(request.ClientId))
-            //{ application = await _unitOfWork.Applications.FirstOrDefaultAsync(a => a.Name == "Default Application"); }
+            // Get application - prioritize ApplicationId, then ClientId, then default
+            Domain.Entities.Applications.Application? application = null;
 
-            // Check if the tenant name is passed
-            var application = await _unitOfWork.Applications.FirstOrDefaultAsync(a => string.IsNullOrEmpty(request.ClientId) == true ? a.Name == "Default Application" : a.ClientId == request.ClientId);
+            if (request.ApplicationId.HasValue)
+            {
+                application = await _unitOfWork.Applications.GetByIdAsync(request.ApplicationId.Value);
+            }
+            else if (!string.IsNullOrEmpty(request.ClientId))
+            {
+                application = await _unitOfWork.Applications.FirstOrDefaultAsync(a => a.ClientId == request.ClientId);
+            }
+            else
+            {
+                application = await _unitOfWork.Applications.FirstOrDefaultAsync(a => a.Name == "Default Application");
+            }
 
             if (application == null || !application.IsActive)
             {
@@ -59,32 +68,48 @@ public class AuthenticationService : IAuthenticationService
                 tenantId = tenant?.Id;
             }
 
-            // Get user - check for system admin first (null tenantId), then regular user
-            var user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.IsSystemAdmin && u.TenantId == null);
+            // Check if the input is an email or username
+            bool isEmail = request.EmailOrUsername.Contains("@");
 
-            if (user == null && tenantId.HasValue)
+            // Get user - check for system admin first (null tenantId), then regular user
+            User? user = null;
+
+            if (isEmail)
             {
-                // If not a system admin, try to find regular user in the specified tenant
-                user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == request.Email && u.TenantId == tenantId);
+                user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == request.EmailOrUsername && u.IsSystemAdmin && u.TenantId == null);
+
+                if (user == null && tenantId.HasValue)
+                {
+                    user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == request.EmailOrUsername && u.TenantId == tenantId);
+                }
+            }
+            else
+            {
+                user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Username == request.EmailOrUsername && u.IsSystemAdmin && u.TenantId == null);
+
+                if (user == null && tenantId.HasValue)
+                {
+                    user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Username == request.EmailOrUsername && u.TenantId == tenantId);
+                }
             }
 
             // Handle legacy database authentication
             if (application.HasLegacyDatabase && user == null && tenantId.HasValue)
             {
                 var legacyResult = await _legacyAuthService.AuthenticateAgainstLegacyDbAsync(
-                    application.Id, request.Email, request.Password);
+                    application.Id, request.EmailOrUsername, request.Password);
 
                 if (legacyResult.IsSuccess)
                 {
                     // Create or update user in auth server
-                    user = await GetOrCreateUserFromLegacy(tenantId.Value, application.Id, legacyResult.Data);
+                    user = await GetOrCreateUserFromLegacy(tenantId.Value, application.Id, legacyResult.Data, request.EmailOrUsername);
                 }
             }
 
             if (user == null)
             {
                 await LogAuditEvent(tenantId, null, request.ClientId, "LoginFailed", false, "User not found", request.IpAddress);
-                return Result<LoginResponseDto>.Failure("Invalid email or password");
+                return Result<LoginResponseDto>.Failure("Invalid email/username or password");
             }
 
             // Check if user is active
@@ -104,7 +129,7 @@ public class AuthenticationService : IAuthenticationService
             // Verify password (skip for legacy users on first login)
             if (!string.IsNullOrEmpty(user.PasswordHash))
             {
-                if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash) && !application.HasLegacyDatabase)
                 {
                     // Only handle failed login for non-system admins with tenant
                     if (tenant != null)
@@ -119,7 +144,7 @@ public class AuthenticationService : IAuthenticationService
                     }
 
                     await LogAuditEvent(user.TenantId, user.Id, request.ClientId, "LoginFailed", false, "Invalid password", request.IpAddress);
-                    return Result<LoginResponseDto>.Failure("Invalid email or password");
+                    return Result<LoginResponseDto>.Failure("Invalid email/username or password");
                 }
             }
 
@@ -140,6 +165,10 @@ public class AuthenticationService : IAuthenticationService
 
             await LogAuditEvent(user.TenantId, user.Id, request.ClientId, "Login", true, null, request.IpAddress);
 
+            // Get legacy user ID mapping if it exists
+            var userMapping = await _unitOfWork.ApplicationUserMappings
+                .FirstOrDefaultAsync(m => m.UserId == user.Id && m.ApplicationId == application.Id);
+
             var jwtSettings = _configuration.GetSection("JwtSettings");
             var expiresIn = application.AccessTokenLifetimeSeconds ?? (int.Parse(jwtSettings["AccessTokenExpirationMinutes"] ?? "15") * 60);
 
@@ -156,7 +185,8 @@ public class AuthenticationService : IAuthenticationService
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     EmailVerified = user.EmailVerified,
-                    IsSystemAdmin = user.IsSystemAdmin
+                    IsSystemAdmin = user.IsSystemAdmin,
+                    LegacyUserId = userMapping?.LegacyUserId
                 }
             });
         }
@@ -211,6 +241,10 @@ public class AuthenticationService : IAuthenticationService
 
             await LogAuditEvent(refreshToken.TenantId, refreshToken.UserId, request.ClientId, "TokenRefreshed", true, null, request.IpAddress);
 
+            // Get legacy user ID mapping if it exists
+            var userMapping = await _unitOfWork.ApplicationUserMappings
+                .FirstOrDefaultAsync(m => m.UserId == refreshToken.UserId && m.ApplicationId == refreshToken.ApplicationId);
+
             var expiresIn = refreshToken.Application.AccessTokenLifetimeSeconds ??
                 (int.Parse(_configuration["JwtSettings:AccessTokenExpirationMinutes"] ?? "15") * 60);
 
@@ -227,7 +261,8 @@ public class AuthenticationService : IAuthenticationService
                     FirstName = refreshToken.User.FirstName,
                     LastName = refreshToken.User.LastName,
                     EmailVerified = refreshToken.User.EmailVerified,
-                    IsSystemAdmin = refreshToken.User.IsSystemAdmin
+                    IsSystemAdmin = refreshToken.User.IsSystemAdmin,
+                    LegacyUserId = userMapping?.LegacyUserId
                 }
             });
         }
@@ -383,44 +418,86 @@ public class AuthenticationService : IAuthenticationService
         await _unitOfWork.SaveChangesAsync();
     }
 
-    private async Task<User> GetOrCreateUserFromLegacy(Guid tenantId, Guid applicationId, LegacyUserDto legacyUser)
+    private async Task<User> GetOrCreateUserFromLegacy(Guid tenantId, Guid applicationId, LegacyUserDto legacyUser, string emailOrUsername)
     {
-        var user = await _unitOfWork.Users
-            .FirstOrDefaultAsync(u => u.Email == legacyUser.Email && u.TenantId == tenantId);
-
-        if (user == null)
+        try
         {
-            user = new User
+            var user = await _unitOfWork.Users
+                .FirstOrDefaultAsync(u => u.Email == legacyUser.Email && u.TenantId == tenantId);
+
+            bool isNewUser = false;
+            if (user == null)
             {
-                Id = Guid.NewGuid(),
-                TenantId = tenantId,
-                Email = legacyUser.Email,
-                FirstName = legacyUser.FirstName,
-                LastName = legacyUser.LastName,
-                EmailVerified = true
-            };
+                // Determine if input was email or username
+                bool isEmail = emailOrUsername.Contains("@");
+                string username = isEmail ? null : emailOrUsername;
 
-            await _unitOfWork.Users.AddAsync(user);
+                // Try to extract phone number from additional data
+                string phoneNumber = string.Empty;
+                if (legacyUser.AdditionalData.ContainsKey("PhoneNumber"))
+                {
+                    phoneNumber = legacyUser.AdditionalData["PhoneNumber"]?.ToString() ?? string.Empty;
+                }
+
+                user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    Email = legacyUser.Email,
+                    Username = username,
+                    FirstName = legacyUser.FirstName,
+                    LastName = legacyUser.LastName,
+                    EmailVerified = true,
+
+                    // Required fields
+                    PasswordHash = string.Empty, // Legacy users authenticate against legacy DB
+                    PhoneNumber = phoneNumber,
+                    Roles = "User", // Default role for legacy users
+                    SecurityStamp = Guid.NewGuid(),
+                    LastLoginIp = string.Empty,
+
+                    // Account settings
+                    IsActive = true,
+                    LockoutEnabled = true,
+                    AccessFailedCount = 0,
+                    IsSystemAdmin = false,
+                    TwoFactorEnabled = false,
+                    PhoneNumberVerified = false
+                };
+
+                await _unitOfWork.Users.AddAsync(user);
+                isNewUser = true;
+
+                // Save the user first to ensure it's tracked properly in EF
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            // Create or update mapping (after user is saved)
+            var mapping = await _unitOfWork.ApplicationUserMappings
+                .FirstOrDefaultAsync(m => m.UserId == user.Id && m.ApplicationId == applicationId);
+
+            if (mapping == null)
+            {
+                mapping = new ApplicationUserMapping
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    ApplicationId = applicationId,
+                    LegacyUserId = legacyUser.LegacyUserId,
+                    Metadata = "{}"
+                };
+                await _unitOfWork.ApplicationUserMappings.AddAsync(mapping);
+
+                // Save the mapping separately
+                await _unitOfWork.SaveChangesAsync();
+            }
+
+            return user;
         }
-
-        // Create or update mapping
-        var mapping = await _unitOfWork.ApplicationUserMappings
-            .FirstOrDefaultAsync(m => m.UserId == user.Id && m.ApplicationId == applicationId);
-
-        if (mapping == null)
+        catch (Exception ex)
         {
-            mapping = new ApplicationUserMapping
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                ApplicationId = applicationId,
-                LegacyUserId = legacyUser.LegacyUserId
-            };
-            await _unitOfWork.ApplicationUserMappings.AddAsync(mapping);
+            throw ex;
         }
-
-        await _unitOfWork.SaveChangesAsync();
-        return user;
     }
 
     private async Task LogAuditEvent(Guid? tenantId, Guid? userId, string? clientId, string eventType, bool success, string? error, string? ipAddress)

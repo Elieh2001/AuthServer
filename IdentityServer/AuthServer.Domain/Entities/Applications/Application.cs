@@ -8,22 +8,22 @@ public class Application : TenantEntity
 {
     #region Properties
 
-    public string Name { get; set; }
-    public string Description { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     // OAuth Client Credentials
-    public string ClientId { get; set; }
-    public string ClientSecretHash { get; set; }
+    public string ClientId { get; set; } = string.Empty;
+    public string ClientSecretHash { get; set; } = string.Empty;
 
     // Application Type
     public ApplicationType ApplicationType { get; set; }
 
     // OAuth Configuration
-    public string AllowedGrantTypes { get; set; } // Comma-separated
-    public string AllowedScopes { get; set; } // Comma-separated
-    public string RedirectUris { get; set; } // JSON array
-    public string PostLogoutRedirectUris { get; set; } // JSON array
-    public string AllowedCorsOrigins { get; set; } // JSON array
+    public string AllowedGrantTypes { get; set; } = string.Empty; // Comma-separated
+    public string AllowedScopes { get; set; } = string.Empty; // Comma-separated
+    public string? RedirectUris { get; set; } // JSON array
+    public string? PostLogoutRedirectUris { get; set; } // JSON array
+    public string? AllowedCorsOrigins { get; set; } // JSON array
 
     // Token Configuration (nullable = use global defaults)
     public int? AccessTokenLifetimeSeconds { get; set; }
@@ -33,31 +33,32 @@ public class Application : TenantEntity
 
     // External Providers - Google
     public bool GoogleEnabled { get; set; }
-    public string GoogleClientId { get; set; }
-    public string GoogleClientSecret { get; set; } // Encrypted
+    public string? GoogleClientId { get; set; }
+    public string? GoogleClientSecret { get; set; } // Encrypted
 
     // External Providers - Apple
     public bool AppleEnabled { get; set; }
-    public string AppleClientId { get; set; }
-    public string AppleTeamId { get; set; }
-    public string AppleKeyId { get; set; }
-    public string ApplePrivateKey { get; set; } // Encrypted
+    public string? AppleClientId { get; set; }
+    public string? AppleTeamId { get; set; }
+    public string? AppleKeyId { get; set; }
+    public string? ApplePrivateKey { get; set; } // Encrypted
 
     // External Providers - LinkedIn
     public bool LinkedInEnabled { get; set; }
-    public string LinkedInClientId { get; set; }
-    public string LinkedInClientSecret { get; set; } // Encrypted
+    public string? LinkedInClientId { get; set; }
+    public string? LinkedInClientSecret { get; set; } // Encrypted
 
     // Legacy Database Configuration
     public bool HasLegacyDatabase { get; set; }
-    public string LegacyDatabaseConnectionString { get; set; } // Encrypted
+    public string? LegacyDatabaseConnectionString { get; set; } // Encrypted
     public LegacyDatabaseType? LegacyDatabaseType { get; set; }
-    public string LegacyUserTableName { get; set; }
-    public string LegacyUserIdColumn { get; set; }
-    public string LegacyEmailColumn { get; set; }
-    public string LegacyPasswordColumn { get; set; }
+    public string? LegacyUserTableName { get; set; }
+    public string? LegacyUserIdColumn { get; set; }
+    public string? LegacyEmailColumn { get; set; }
+    public string? LegacyUsernameColumn { get; set; }
+    public string? LegacyPasswordColumn { get; set; }
     public PasswordHashAlgorithm? LegacyPasswordHashAlgorithm { get; set; }
-    public string LegacyAdditionalColumnsMapping { get; set; } // JSON
+    public string? LegacyAdditionalColumnsMapping { get; set; } // JSON
 
     public bool IsActive { get; set; } = true;
 

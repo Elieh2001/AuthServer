@@ -42,6 +42,10 @@ public class TokenService : ITokenService
         if (application == null)
             throw new Exception("Application not found");
 
+        // Get the legacy user ID mapping if it exists
+        var userMapping = await _unitOfWork.ApplicationUserMappings
+            .FirstOrDefaultAsync(m => m.UserId == userId && m.ApplicationId == applicationId);
+
         var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
@@ -51,6 +55,12 @@ public class TokenService : ITokenService
                 new Claim("security_stamp", user.SecurityStamp.ToString()),
                 new Claim("is_system_admin", user.IsSystemAdmin.ToString().ToLower())
             };
+
+        // Add legacy user ID if mapping exists
+        if (userMapping != null && !string.IsNullOrEmpty(userMapping.LegacyUserId))
+        {
+            claims.Add(new Claim("legacy_user_id", userMapping.LegacyUserId));
+        }
 
         if (tenantId.HasValue)
         {

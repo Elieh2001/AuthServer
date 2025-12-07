@@ -8,6 +8,7 @@ public class User : TenantEntity
     #region Properties
 
     public string Email { get; set; } = string.Empty;
+    public string? Username { get; set; }
     public bool EmailVerified { get; set; }
 
     // For native authentication (NULL if only external logins)

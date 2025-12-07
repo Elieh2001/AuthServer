@@ -43,8 +43,12 @@ const ApplicationFormDialog = ({ open, onClose, onSubmit, application, tenants =
   useEffect(() => {
     if (application) {
       setFormData({
+        tenantId: application.tenantId || user?.tenantId || '',
         name: application.name || '',
         description: application.description || '',
+        applicationType: application.applicationType || 'Native',
+        allowedGrantTypes: application.allowedGrantTypes || 'authorization_code,refresh_token',
+        allowedScopes: application.allowedScopes || 'openid,profile,email',
         redirectUris: application.redirectUris || '',
         postLogoutRedirectUris: application.postLogoutRedirectUris || '',
         accessTokenLifetimeSeconds: application.accessTokenLifetimeSeconds || 3600,
@@ -54,9 +58,20 @@ const ApplicationFormDialog = ({ open, onClose, onSubmit, application, tenants =
         googleClientSecret: '',
         appleEnabled: application.appleEnabled || false,
         appleClientId: application.appleClientId || '',
+        appleTeamId: application.appleTeamId || '',
+        appleKeyId: application.appleKeyId || '',
+        applePrivateKey: '',
         linkedInEnabled: application.linkedInEnabled || false,
         linkedInClientId: application.linkedInClientId || '',
         linkedInClientSecret: '',
+        hasLegacyDatabase: application.hasLegacyDatabase || false,
+        legacyDatabaseConnectionString: '',
+        legacyDatabaseType: application.legacyDatabaseType || 'SqlServer',
+        legacyUserTableName: application.legacyUserTableName || '',
+        legacyUserIdColumn: application.legacyUserIdColumn || 'Id',
+        legacyEmailColumn: application.legacyEmailColumn || 'Email',
+        legacyPasswordColumn: application.legacyPasswordColumn || 'PasswordHash',
+        legacyPasswordHashAlgorithm: application.legacyPasswordHashAlgorithm || 'BCrypt',
         isActive: application.isActive !== undefined ? application.isActive : true,
       });
     } else {
@@ -140,7 +155,7 @@ const ApplicationFormDialog = ({ open, onClose, onSubmit, application, tenants =
                       External Providers
                     </Nav.Link>
                   </Nav.Item>
-                  {!isEditing && formData.applicationType === 'LegacyDatabase' && (
+                  {formData.applicationType === 'LegacyDatabase' && (
                     <Nav.Item>
                       <Nav.Link eventKey="legacy" className="mb-2">
                         <i className="bi bi-database me-2"></i>
@@ -207,6 +222,26 @@ const ApplicationFormDialog = ({ open, onClose, onSubmit, application, tenants =
                                 </Form.Select>
                                 <Form.Text className="text-muted">
                                   Choose the type based on your authentication requirements
+                                </Form.Text>
+                              </Form.Group>
+                            </Col>
+                          )}
+
+                          {isEditing && (
+                            <Col md={12} className="mb-3">
+                              <Form.Group>
+                                <Form.Label className="fw-bold">
+                                  <i className="bi bi-gear me-2"></i>
+                                  Application Type
+                                </Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  value={formData.applicationType}
+                                  disabled
+                                  className="form-control-lg"
+                                />
+                                <Form.Text className="text-muted">
+                                  Application type cannot be changed after creation
                                 </Form.Text>
                               </Form.Group>
                             </Col>
@@ -590,7 +625,7 @@ const ApplicationFormDialog = ({ open, onClose, onSubmit, application, tenants =
                   </Tab.Pane>
 
                   {/* Legacy Database Tab */}
-                  {!isEditing && formData.applicationType === 'LegacyDatabase' && (
+                  {formData.applicationType === 'LegacyDatabase' && (
                     <Tab.Pane eventKey="legacy">
                       <Card className="border-0 shadow-sm">
                         <Card.Body>
@@ -618,16 +653,21 @@ const ApplicationFormDialog = ({ open, onClose, onSubmit, application, tenants =
                                   <Form.Group className="mb-3">
                                     <Form.Label className="fw-bold">
                                       <i className="bi bi-link-45deg me-2"></i>
-                                      Connection String
+                                      Connection String {isEditing && <span className="text-muted">(Leave empty to keep current)</span>}
                                     </Form.Label>
                                     <Form.Control
                                       type="password"
                                       name="legacyDatabaseConnectionString"
                                       value={formData.legacyDatabaseConnectionString}
                                       onChange={handleChange}
-                                      placeholder="Server=localhost;Database=mydb;User Id=user;Password=pass;"
+                                      placeholder={isEditing ? "Enter new connection string to update" : "Server=localhost;Database=mydb;User Id=user;Password=pass;"}
                                       className="form-control-lg font-monospace"
                                     />
+                                    {isEditing && (
+                                      <Form.Text className="text-muted">
+                                        For security reasons, the connection string is not displayed. Leave empty to keep the existing connection string.
+                                      </Form.Text>
+                                    )}
                                   </Form.Group>
                                 </Col>
                               </Row>

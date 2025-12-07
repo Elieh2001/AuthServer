@@ -7,10 +7,10 @@ public class ApplicationUserMapping : BaseEntity
     #region Properties
 
     public Guid UserId { get; set; }
-    public virtual User User { get; set; } = new User();
+    public virtual User User { get; set; }
 
     public Guid ApplicationId { get; set; }
-    public virtual Application Application { get; set; } = new Application();
+    public virtual Application Application { get; set; }
 
     // The user ID in the legacy application's database
     public string LegacyUserId { get; set; } = string.Empty;

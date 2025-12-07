@@ -6,6 +6,6 @@ namespace AuthServer.Application.Interfaces;
 
 public interface ILegacyAuthenticationService
 {
-    Task<Result<LegacyUserDto>> AuthenticateAgainstLegacyDbAsync(Guid applicationId, string email, string password);
+    Task<Result<LegacyUserDto>> AuthenticateAgainstLegacyDbAsync(Guid applicationId, string emailOrUsername, string password);
     Task<bool> TestLegacyConnectionAsync(Guid applicationId);
 }

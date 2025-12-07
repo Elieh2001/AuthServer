@@ -15,6 +15,12 @@ using OpenTelemetry.Trace;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Logs;
 
+// ===============================================
+// ENABLE PII LOGGING (JWT Debugging)
+// ===============================================
+// IMPORTANT: Remove this in production!
+Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ===============================================
@@ -114,7 +120,19 @@ builder.Services.AddScoped<ILegacyAuthenticationService, LegacyAuthenticationSer
 // ===============================================
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];
+var issuer = jwtSettings["Issuer"];
+var audience = jwtSettings["Audience"];
 var key = Encoding.UTF8.GetBytes(secretKey);
+
+// DIAGNOSTIC LOGGING
+Console.WriteLine("=== JWT CONFIGURATION ===");
+Console.WriteLine($"Issuer: {issuer}");
+Console.WriteLine($"Audience: {audience}");
+Console.WriteLine($"Secret Key: {secretKey}");
+Console.WriteLine($"Secret Key Length: {secretKey?.Length} characters");
+Console.WriteLine($"Key Bytes Length: {key.Length} bytes");
+Console.WriteLine($"ShowPII: {Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII}");
+Console.WriteLine("=========================");
 
 // Configure JWT Authentication with proper role handling
 System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
@@ -135,9 +153,9 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
         ValidateIssuer = true,
-        ValidIssuer = jwtSettings["Issuer"],
+        ValidIssuer = issuer,
         ValidateAudience = true,
-        ValidAudience = jwtSettings["Audience"],
+        ValidAudience = audience,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.FromMinutes(int.Parse(jwtSettings["ClockSkewMinutes"])),
         RoleClaimType = "role",
@@ -149,7 +167,13 @@ builder.Services.AddAuthentication(options =>
         OnAuthenticationFailed = context =>
         {
             var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError("Authentication failed: {Exception}", context.Exception.Message);
+            logger.LogError("Authentication failed: {Exception}", context.Exception.ToString());
+            logger.LogError("Exception Type: {ExceptionType}", context.Exception.GetType().Name);
+
+            if (context.Exception.InnerException != null)
+            {
+                logger.LogError("Inner Exception: {InnerException}", context.Exception.InnerException.ToString());
+            }
 
             if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
             {

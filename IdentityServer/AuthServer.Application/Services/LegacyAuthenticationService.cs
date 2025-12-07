@@ -37,7 +37,7 @@ public class LegacyAuthenticationService : ILegacyAuthenticationService
 
     #region Public Methods
 
-    public async Task<Result<LegacyUserDto>> AuthenticateAgainstLegacyDbAsync(Guid applicationId, string email, string password)
+    public async Task<Result<LegacyUserDto>> AuthenticateAgainstLegacyDbAsync(Guid applicationId, string emailOrUsername, string password)
     {
         try
         {
@@ -61,14 +61,32 @@ public class LegacyAuthenticationService : ILegacyAuthenticationService
                 connection.Open();
             }
 
-            // Build query to fetch user
+            // Check if the input is an email or username
+            bool isEmail = emailOrUsername.Contains("@");
+
+            // Build query to fetch user - support both email and username
+            string whereClause;
+            if (isEmail)
+            {
+                whereClause = $"{application.LegacyEmailColumn} = @EmailOrUsername";
+            }
+            else if (!string.IsNullOrEmpty(application.LegacyUsernameColumn))
+            {
+                whereClause = $"{application.LegacyUsernameColumn} = @EmailOrUsername";
+            }
+            else
+            {
+                // Fallback to email column if no username column configured
+                whereClause = $"{application.LegacyEmailColumn} = @EmailOrUsername";
+            }
+
             var query = $@"
                 SELECT
                     {application.LegacyUserIdColumn} as UserId,
                     {application.LegacyEmailColumn} as Email,
                     {application.LegacyPasswordColumn} as PasswordHash
                 FROM {application.LegacyUserTableName}
-                WHERE {application.LegacyEmailColumn} = @Email";
+                WHERE {whereClause}";
 
             // Add additional columns if configured
             var additionalColumns = new List<string>();
@@ -95,7 +113,7 @@ public class LegacyAuthenticationService : ILegacyAuthenticationService
             }
 
             // Execute query
-            var result = await connection.QueryFirstOrDefaultAsync<dynamic>(query, new { Email = email });
+            var result = await connection.QueryFirstOrDefaultAsync<dynamic>(query, new { EmailOrUsername = emailOrUsername });
 
             if (result == null)
                 return Result<LegacyUserDto>.Failure("User not found in legacy database");
@@ -214,19 +232,45 @@ public class LegacyAuthenticationService : ILegacyAuthenticationService
     {
         try
         {
+            // Remove "0x" prefix if present (used in CreateMD5 method)
+            string cleanStoredHash = storedHash.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                ? storedHash.Substring(2)
+                : storedHash;
+
             using (algorithm)
             {
-                var passwordBytes = Encoding.UTF8.GetBytes(password);
-                var hashBytes = algorithm.ComputeHash(passwordBytes);
-                var computedHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                // Try UTF8 encoding first (used in GetMd5 method - most common)
+                var utf8Hash = ComputeHashString(password, algorithm, Encoding.UTF8);
+                if (string.Equals(utf8Hash, cleanStoredHash, StringComparison.OrdinalIgnoreCase))
+                    return true;
 
-                return string.Equals(computedHash, storedHash.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase);
+                // Try ASCII encoding (used in CreateMD5 method)
+                algorithm.Initialize(); // Reset the algorithm
+                var asciiHash = ComputeHashString(password, algorithm, Encoding.ASCII);
+                if (string.Equals(asciiHash, cleanStoredHash, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                return false;
             }
         }
         catch
         {
             return false;
         }
+    }
+
+    private string ComputeHashString(string password, HashAlgorithm algorithm, Encoding encoding)
+    {
+        var passwordBytes = encoding.GetBytes(password);
+        var hashBytes = algorithm.ComputeHash(passwordBytes);
+
+        // Convert to hex string (case-insensitive comparison handles both uppercase and lowercase)
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < hashBytes.Length; i++)
+        {
+            sb.Append(hashBytes[i].ToString("x2"));
+        }
+        return sb.ToString();
     }
 
     private bool VerifyBCrypt(string password, string storedHash)

@@ -11,6 +11,7 @@ const ApplicationsList = () => {
   const [applications, setApplications] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingApplication, setEditingApplication] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '', variant: 'success' });
@@ -44,9 +45,29 @@ const ApplicationsList = () => {
     fetchTenants();
   }, [fetchApplications, fetchTenants]);
 
-  const handleOpenDialog = (application = null) => {
-    setEditingApplication(application);
-    setOpenDialog(true);
+  const handleOpenDialog = async (application = null) => {
+    if (application) {
+      // Fetch complete application details for editing
+      try {
+        setLoadingDetails(true);
+        const fullApplication = await applicationService.getById(application.id);
+        setEditingApplication(fullApplication);
+        setOpenDialog(true);
+      } catch (err) {
+        setToast({ 
+          show: true, 
+          message: 'Failed to load application details', 
+          variant: 'danger' 
+        });
+        console.error('Failed to load application details', err);
+      } finally {
+        setLoadingDetails(false);
+      }
+    } else {
+      // Creating new application
+      setEditingApplication(null);
+      setOpenDialog(true);
+    }
   };
 
   const handleCloseDialog = () => {
@@ -185,9 +206,14 @@ const ApplicationsList = () => {
                             variant="outline-primary"
                             size="sm"
                             onClick={() => handleOpenDialog(app)}
+                            disabled={loadingDetails}
                             title="Edit"
                           >
-                            <i className="bi bi-pencil"></i>
+                            {loadingDetails ? (
+                              <Spinner animation="border" size="sm" />
+                            ) : (
+                              <i className="bi bi-pencil"></i>
+                            )}
                           </Button>
                           <Button
                             variant="outline-warning"

@@ -9,4 +9,5 @@ public class UserInfoDto
     public string LastName { get; set; } = string.Empty;
     public bool EmailVerified { get; set; }
     public bool IsSystemAdmin { get; set; }
+    public string? LegacyUserId { get; set; }
 }

@@ -146,9 +146,9 @@ public class ApplicationUserMappingConfiguration : IEntityTypeConfiguration<Appl
             .IsRequired()
             .HasDefaultValueSql("GETUTCDATE()");
 
-        builder.HasIndex(aum => new { aum.ApplicationId, aum.LegacyUserId })
-            .IsUnique()
-            .HasDatabaseName("UQ_AppUserMappings_App_LegacyUser");
+        //builder.HasIndex(aum => new { aum.ApplicationId, aum.LegacyUserId })
+        //    .IsUnique()
+        //    .HasDatabaseName("UQ_AppUserMappings_App_LegacyUser");
 
         builder.HasIndex(aum => aum.UserId)
             .HasDatabaseName("IX_AppUserMappings_UserId");

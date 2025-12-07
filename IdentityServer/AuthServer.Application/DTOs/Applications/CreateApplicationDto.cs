@@ -47,6 +47,7 @@ public class CreateApplicationDto
     public string LegacyUserTableName { get; set; } = string.Empty;
     public string LegacyUserIdColumn { get; set; } = string.Empty;
     public string LegacyEmailColumn { get; set; } = string.Empty;
+    public string LegacyUsernameColumn { get; set; } = string.Empty;
     public string LegacyPasswordColumn { get; set; } = string.Empty;
     public string LegacyPasswordHashAlgorithm { get; set; } = string.Empty;
 }
